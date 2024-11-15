@@ -240,6 +240,7 @@
         </div>
     </div>
     <audio id="musicPreview"></audio>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
     <script>
         const grid = document.getElementById('grid');
         const tools = document.querySelectorAll('.tool');
@@ -402,45 +403,46 @@
 
 
         // Export level
-        // Update export functionality to handle custom music
+        // Update export functionality
         exportBtn.addEventListener('click', () => {
             const levelName = levelNameInput.value || 'Untitled Level';
             let musicFile = musicSelect.value;
-            
-            // If using custom music, we need to create a copy of the file
-            if (customMusicFile && musicSelect.value === 'custom') {
-                // Create a safe filename
-                musicFile = 'custom_' + customMusicFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const zip = new JSZip();
                 
-                // Create a copy of the custom music file
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const musicBlob = new Blob([e.target.result], { type: customMusicFile.type });
-                    const musicUrl = URL.createObjectURL(musicBlob);
-                    
-                    // Download the music file
-                    const musicLink = document.createElement('a');
-                    musicLink.href = musicUrl;
-                    musicLink.download = musicFile;
-                    document.body.appendChild(musicLink);
-                    musicLink.click();
-                    document.body.removeChild(musicLink);
-                    URL.revokeObjectURL(musicUrl);
-                    
-                    // Now create and download the level file
-                    createAndDownloadLevel(levelName, musicFile);
-                };
-                reader.readAsArrayBuffer(customMusicFile);
-            } else {
-                // Regular music file, proceed as normal
-                createAndDownloadLevel(levelName, musicFile);
+                    // Add the level HTML content
+            if (musicSelect.value === 'custom' && customMusicFile) {
+                musicFile = 'custom_' + customMusicFile.name;
             }
-        });
 
-            
-// Helper function to create and download the level file
-function createAndDownloadLevel(levelName, musicFile) {
-    const levelContent = `<!DOCTYPE html>
+            // Create README content based on music type
+            const readmeContent = [
+                `Level: ${levelName}`,
+                `Music File Required: ${musicFile}`,
+                ``,
+                `Setup Instructions:`,
+                `1. Extract all files from this zip`,
+            ];
+
+            // Add specific instructions based on music type
+            if (musicSelect.value === 'custom' && customMusicFile) {
+                readmeContent.push(
+                    `2. The music file is included in this zip - move it to the LevelSoundtracks folder in the root of the TeleporterDash directory`,
+                    `3. Move the HTML file in the root of the TeleporterDash directory`,
+                    `4. Open ${levelName}.html in your browser to play the level`
+                );
+            } else {
+                readmeContent.push(
+                    `2. Copy "${levelName}.html" to the root of the TeleporterDash directory`,
+                    `3. Open ${levelName}.html in your browser to play the level`
+                );
+            }
+
+            // Add README to zip
+            zip.file('README.txt', readmeContent.join('\n'));
+
+
+            // Add the level HTML content
+            const levelContent = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -1660,24 +1662,46 @@ function createAndDownloadLevel(levelName, musicFile) {
     <\/script>
 </body>
 </html>`;
+            
 
-    // Create download link for the level file
-    const blob = new Blob([levelContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${levelName.toLowerCase().replace(/\s+/g, '_')}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
+            /// Add level HTML to zip
+            zip.file(levelName + '.html', levelContent);
 
+            // For custom music, add it directly to the zip
+            if (musicSelect.value === 'custom' && customMusicFile) {
+                zip.file('LevelSoundtracks/' + musicFile, customMusicFile);
+            }
+                    
+            // Generate and download the zip
+            zip.generateAsync({type: 'blob'})
+                .then(function(content) {
+                    const url = URL.createObjectURL(content);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = levelName + '.zip';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                });
+        });
 
-        clearBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear the grid?')) {
-                levelMatrix = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(0));
-                updateGridVisuals();
+        // Add this for handling custom music file selection
+        customMusicInput.addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                customMusicFile = e.target.files[0];
+                // Update music select to show custom file name
+                const option = document.createElement('option');
+                option.value = 'custom';
+                option.text = 'Custom: ' + customMusicFile.name;
+                option.selected = true;
+                
+                // Remove any existing custom option
+                Array.from(musicSelect.options).forEach(opt => {
+                    if (opt.value === 'custom') musicSelect.removeChild(opt);
+                });
+                
+                musicSelect.add(option);
             }
         });
 
