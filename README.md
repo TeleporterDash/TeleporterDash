@@ -1,2 +1,2 @@
 # Teleporter-Dash
-A Geometry Dash-like game in HTML and JavaScript.
+A Geometry Dash remake in HTML and JavaScript.
