@@ -324,7 +324,7 @@
             Game Over!
             <br>
             <button id="restartBtn">Try Again</button>
-            <button onclick="window.location.href='../index.html'"
+            <button onclick="window.location.href='../TDMenu.html'"
                 style="background: #4285F4; color: white; padding: 10px 20px; border: none; border-radius: 5px; margin-top: 10px; cursor: pointer;">Back
                 to Menu</button>
         </div>
@@ -398,7 +398,7 @@
                 style="background: #00ff00; color: white; padding: 10px 20px; border: none; border-radius: 5px; margin: 10px; cursor: pointer;">Resume</button>
             <button id="restartFromPauseBtn"
                 style="background: #4285F4; color: white; padding: 10px 20px; border: none; border-radius: 5px; margin: 10px; cursor: pointer;">Restart</button>
-            <button onclick="window.location.href='../index.html'"
+            <button onclick="window.location.href='../TDMenu.html'"
                 style="background: #ff4444; color: white; padding: 10px 20px; border: none; border-radius: 5px; margin: 10px; cursor: pointer;">Exit
                 to Menu</button>
         </div>
@@ -409,7 +409,7 @@
         <button id="nextLevelBtn"
             style="background: #4285F4; color: white; padding: 10px 20px; border: none; border-radius: 5px; margin: 10px; cursor: pointer;">Next
             Level</button>
-        <button onclick="window.location.href='../index.html'"
+        <button onclick="window.location.href='../TDMenu.html'"
             style="background: #4285F4; color: white; padding: 10px 20px; border: none; border-radius: 5px; margin: 10px; cursor: pointer;">Back
             to Menu</button>
     </div>
@@ -941,25 +941,34 @@
                 if (data.musicValue === 'custom' && data.musicData) {
                     const blob = new Blob([data.musicData.data], { type: data.musicData.type });
                     levelMusic = URL.createObjectURL(blob);
+                    console.log('LevelMusic: ', levelMusic);
                 } else if (isPracticeMode) {
                     levelMusic = '../Sound/Basic Soundeffects/practicetd.ogg';
+                    console.log('LevelMusic: ', levelMusic);
                 } else if (data.musicValue && data.musicValue.startsWith('../Sound/Level Soundtracks/')) {
                     levelMusic = `${data.musicValue}`;
+                    console.log('LevelMusic: ', levelMusic);
                 } else if (data.musicValue) {
                     levelMusic = `../Sound/Level Soundtracks/${data.musicValue}`;
+                    console.log('LevelMusic: ', levelMusic);
                 } else if (data.musicData) {
                     levelMusic = `${data.musicData}`;
+                    console.log('LevelMusic: ', levelMusic);
                 } else if (data.music && data.music.startsWith('../Sound/Level Soundtracks/')) {
                     levelMusic = `${data.music}`;
+                    console.log('LevelMusic: ', levelMusic);
                 } else if (data.music) {
                     levelMusic = `../Sound/Level Soundtracks/${data.music}`;
+                    console.log('LevelMusic: ', levelMusic);
                 } else {
                     levelMusic = '../Sound/Level Soundtracks/level1.ogg';
+                    console.log('LevelMusic: ', levelMusic);
                 }
 
                 // Ensure Safari gets .mp3 instead of .ogg
                 if (AudioManager.isSafari() && !levelMusic.endsWith('.mp3')) {
                     levelMusic = levelMusic.replace(/\.\w+$/, '.mp3');
+                    console.log('LevelMusic: ', levelMusic);
                 }
                 
                 levelId = data.id;
@@ -1071,7 +1080,7 @@
         const totalColumns = levelMatrix[0].length;
 
         // Jump buffer timing for more responsive controls
-        let jumpBufferTime = 100; // milliseconds - time window for buffering jump inputs
+        let jumpBufferTime = 250; // milliseconds - time window for buffering jump inputs
         let lastJumpPressTime = 0;
 
         // Progress update timing to optimize performance
@@ -1604,21 +1613,9 @@
                         } else if (obstacle.type === 'teleporter') {
                             const rotation = parseInt(obstacle.element.getAttribute('data-rotation') || '0');
                            
-                            if (rotation === 90) {
+                            if (rotation === 90 || rotation === 270) {
                                 // Horizontal teleport - move obstacles forward/back
                                 const dx = 240; // Move obstacles forward
-                               
-                                // Update all obstacle positions
-                                obstacles.forEach(obs => {
-                                    const obsLeft = parseInt(obs.element.style.left || '0');
-                                    obs.element.style.left = (obsLeft + dx) + 'px';
-                                });
-                               
-                                // Keep player at fixed position
-                                player.style.left = '100px';
-                            } else if (rotation === 270) {
-                                // Horizontal teleport - move obstacles back
-                                const dx = -240; // Move obstacles back
                                
                                 // Update all obstacle positions
                                 obstacles.forEach(obs => {
@@ -1947,18 +1944,21 @@
         }
 
         // ===== Event listeners for player input =====
-        document.addEventListener('touchstart', jump);
         document.addEventListener('keydown', handleSpaceJump);
         document.addEventListener('mousedown', handleMouseJump);
         restartBtn.addEventListener('click', restartGame);
-
         /**
          * Handles player jumping mechanics
          * Includes double jump and jump buffering
          */
         function jump(e) {
             const currentTime = Date.now();
-
+        
+            // Prevent double jump by ensuring minimum buffer time
+            if (currentTime - lastJumpPressTime < jumpBufferTime) {
+                return;
+            }
+        
             // Check if jump is allowed (not game over and either on ground or can double jump)
             if (!isGameOver && (
                 (!isJumping && !isOnPlatform) ||
@@ -1971,9 +1971,8 @@
                 isOnPlatform = false;
                 jumpCount++;  // Track jumps
                 playerVelocity = jumpForce;
-
                 lastJumpPressTime = currentTime;
-
+                
                 // Play jump sound if available and not muted
                 if (!AudioManager.isMuted && AudioManager.jumpSound?.readyState === 4) {
                     AudioManager.jumpSound.currentTime = 0;
@@ -1981,6 +1980,15 @@
                 }
             }
         }
+        
+        // Apply touch event listener with a flag to prevent double triggers
+        document.addEventListener('touchstart', (e) => {
+            if (!e.targetTouches[0].target.__touchHandled) {
+                e.targetTouches[0].target.__touchHandled = true;
+                jump(e);
+                setTimeout(() => { e.targetTouches[0].target.__touchHandled = false; }, jumpBufferTime);
+            }
+        }, { passive: false });
 
         /**
          * Handles spacebar input for jumping
@@ -1992,7 +2000,7 @@
                 jump();
             }
         }
-
+        
         /**
          * Handles mouse input for jumping
          */
@@ -2001,8 +2009,9 @@
                 jump();
             }
         }
-
+    
         /**
+        
          * Updates the progress bar and level completion percentage
          * Called from updateGame when new obstacles are created
          * Throttled to avoid performance issues
