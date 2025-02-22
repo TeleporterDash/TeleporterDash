@@ -16,9 +16,9 @@ If you want to visit the itch.io version, go to https://nellowtcs.itch.io/telepo
 * **Custom Level Creation:** Feeling creative? Use the built-in level editor to design your own challenges and share them online with the community.
 
 ## Updates!
-*</n> **Frequent Updates:** New levels, mechanics, and features are added with every major and minor version.</n>
-*</n> **How the versioning works:**</n>
-</n>v1              .3         .5         .1 </n>
+*</n> **Frequent Updates:** New levels, mechanics, and features are added with every major and minor version.</br>
+*</n> **How the versioning works:**</br>
+</n>v#              .#         .#         .# </br>
 </n>(super major updates)   (major updates)  (minor updates)    (bug fixes)</n>
 
 ## Why Play?
