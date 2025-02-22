@@ -5,9 +5,6 @@ The game is on GitHub and Itch.io!
 If you want to visit the itch.io version, go to https://nellowtcs.itch.io/teleporterdash
 
 ## Known Bugs
-* On first load of any level, you can't jump
-  - Fix: Set Control Method to Spacebar or Mouse Click and then back
-* Practice Mode doesn't work
 * UI can be messed up on the first load of the page.
   - Fix: Reload the page or go to Level Store/Level Creator and back.
     
