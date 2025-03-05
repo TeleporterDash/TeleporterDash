@@ -471,9 +471,10 @@
                 const downloadButton = card.querySelector('.download-button');
                 const deleteButton = card.querySelector('.delete-button');
                 
-                downloadButton.textContent = 'Play Level 🎮';
-                downloadButton.disabled = false;
-                downloadButton.onclick = () => startGame(filename);
+                downloadButton.textContent = 'Downloaded';
+                downloadButton.classList.add('downloaded');
+                downloadButton.disabled = true;
+                downloadButton.onclick = null;
                 
                 deleteButton.classList.remove('hidden');
             }
@@ -561,9 +562,9 @@
                 
                 // Create download button
                 const downloadBtn = document.createElement('button');
-                downloadBtn.className = 'download-button';
-                downloadBtn.textContent = level.isDownloaded ? 'Play Level 🎮' : 'Download';
-                downloadBtn.onclick = level.isDownloaded ? () => startGame(level.filename) : () => downloadLevel(level.filename);
+                downloadBtn.className = 'download-button' + (level.isDownloaded ? ' downloaded' : '');
+                downloadBtn.textContent = level.isDownloaded ? 'Downloaded' : 'Download';
+                downloadBtn.onclick = level.isDownloaded ? null : () => downloadLevel(level.filename);
                 
                 // Create delete button (only shown for downloaded levels)
                 const deleteBtn = document.createElement('button');
@@ -856,15 +857,6 @@
                     </div>`;
             }
         };
-
-        function startGame(levelFilename) {
-            window.location.href = `gameloader.html?online=true&levelFile=${encodeURIComponent(levelFilename)}`;
-
-            transitionMenu(
-                document.querySelector(".menu"),
-             document.querySelector(".level-selector")
-            );
-        }
     </script>
 </body>
 </html>
