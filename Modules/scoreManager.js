@@ -1,8 +1,8 @@
 // Score Manager for Teleporter Dash
 const ScoreManager = {
-    // Default scores structure
+    // Default scores structure using Map
     scores: {
-        levels: {}
+        levels: new Map()
     },
     db: null,
     dbVersion: 2, // Increment version to force upgrade
@@ -10,7 +10,6 @@ const ScoreManager = {
     // Initialize IndexedDB
     async initDB() {
         return new Promise((resolve, reject) => {
-            
             const request = indexedDB.open('TeleporterDashDB', this.dbVersion);
 
             request.onerror = (event) => {
@@ -44,7 +43,7 @@ const ScoreManager = {
             // If database isn't initialized, use memory storage
             if (!this.db) {
                 console.log('Using memory storage fallback');
-                this.scores = { levels: {} };
+                this.scores = { levels: new Map() };
                 return;
             }
 
@@ -60,11 +59,11 @@ const ScoreManager = {
                         keysRequest.onsuccess = () => {
                             const scores = request.result;
                             const keys = keysRequest.result;
-                            this.scores.levels = {};
+                            this.scores.levels = new Map();
                             
                             for (let i = 0; i < scores.length; i++) {
                                 const filename = keys[i];
-                                this.scores.levels[filename] = scores[i];
+                                this.scores.levels.set(filename, scores[i]);
                             }
                             console.log('Scores loaded successfully');
                             resolve();
@@ -73,17 +72,17 @@ const ScoreManager = {
                     
                     request.onerror = () => {
                         console.error('Error loading scores:', request.error);
-                        this.scores = { levels: {} };
+                        this.scores = { levels: new Map() };
                         resolve();
                     };
                 });
             } catch (error) {
                 console.error('Error accessing scores:', error);
-                this.scores = { levels: {} };
+                this.scores = { levels: new Map() };
             }
         } catch (error) {
             console.error('Error initializing scores:', error);
-            this.scores = { levels: {} };
+            this.scores = { levels: new Map() };
         }
     },
 
@@ -99,7 +98,7 @@ const ScoreManager = {
                 const transaction = this.db.transaction(['scores'], 'readwrite');
                 const store = transaction.objectStore('scores');
 
-                for (const [filename, data] of Object.entries(this.scores.levels)) {
+                for (const [filename, data] of this.scores.levels) {
                     await new Promise((resolve, reject) => {
                         const request = store.put(data, filename);
                         request.onsuccess = () => {
@@ -125,8 +124,8 @@ const ScoreManager = {
 
     // Add a new run for a level
     async addRun(filename, time, jumps, deaths = 0) {
-        if (!this.scores.levels[filename]) {
-            this.scores.levels[filename] = {
+        if (!this.scores.levels.has(filename)) {
+            this.scores.levels.set(filename, {
                 bestTime: Infinity,
                 bestJumps: Infinity,
                 lowestDeaths: Infinity,
@@ -134,10 +133,10 @@ const ScoreManager = {
                 totalDeaths: 0,
                 totalRuns: 0,
                 recentRuns: []
-            };
+            });
         }
 
-        const level = this.scores.levels[filename];
+        const level = this.scores.levels.get(filename);
         const run = {
             time,
             jumps,
@@ -165,7 +164,7 @@ const ScoreManager = {
 
     // Get level stats
     getLevelStats(filename) {
-        return this.scores.levels[filename] || {
+        return this.scores.levels.get(filename) || {
             bestTime: Infinity,
             bestJumps: Infinity,
             lowestDeaths: Infinity,
@@ -284,6 +283,7 @@ const ScoreManager = {
             scoreboard.appendChild(recentRunsDiv);
         }
     },
+
     // Create menu scoreboard UI
     createMenuScoreboardUI() {
         const menuScoreboard = document.createElement('div');
@@ -319,7 +319,7 @@ const ScoreManager = {
 
         let html = '<h2 style="margin: 0 0 20px 0; color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);">Level Statistics</h2>';
         
-        const levelIds = Object.keys(this.scores.levels).sort((a, b) => {
+        const levelIds = Array.from(this.scores.levels.keys()).sort((a, b) => {
             const numA = parseInt(a.replace('level', ''));
             const numB = parseInt(b.replace('level', ''));
             return numA - numB;
