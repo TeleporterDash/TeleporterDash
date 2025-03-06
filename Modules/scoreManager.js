@@ -211,60 +211,79 @@ const ScoreManager = {
         if (!scoreboard) {
             scoreboard = this.createScoreboardUI();
         }
-
+        
         const stats = this.getLevelStats(filename);
-        const html = `
-            <h3 style="margin: 0 0 15px 0; color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);">${filename} Stats</h3>
-            <div style="background: rgba(0, 255, 0, 0.1); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
-                <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
-                    <span>Best Time:</span>
-                    <span style="color: #00ff00;">${this.formatTime(stats.bestTime)}</span>
-                </div>
-                <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
-                    <span>Best Jumps:</span>
-                    <span style="color: #00ff00;">${stats.bestJumps === Infinity ? '--' : stats.bestJumps}</span>
-                </div>
-                <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
-                    <span>Lowest Deaths:</span>
-                    <span style="color: #00ff00;">${stats.lowestDeaths === Infinity ? '--' : stats.lowestDeaths}</span>
-                </div>
-                <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
-                    <span>Perfect Runs:</span>
-                    <span style="color: #00ff00;">${stats.perfectRuns}</span>
-                </div>
+    
+        // Clear existing content
+        scoreboard.innerHTML = '';
+    
+        // Create and append the title (h3) using textContent to safely handle filename
+        const title = document.createElement('h3');
+        title.textContent = `${filename} Stats`; // Safe: textContent doesn't interpret HTML
+        title.style.cssText = 'margin: 0 0 15px 0; color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);';
+        scoreboard.appendChild(title);
+    
+        // Best stats section
+        const bestStatsDiv = document.createElement('div');
+        bestStatsDiv.style.cssText = 'background: rgba(0, 255, 0, 0.1); padding: 15px; border-radius: 10px; margin-bottom: 15px;';
+        bestStatsDiv.innerHTML = `
+            <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
+                <span>Best Time:</span>
+                <span style="color: #00ff00;">${this.formatTime(stats.bestTime)}</span>
             </div>
-            <div style="background: rgba(0, 255, 0, 0.05); padding: 15px; border-radius: 10px;">
-                <h4 style="margin: 0 0 10px 0; color: #00ff00;">Total Stats</h4>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <span>Total Runs:</span>
-                    <span>${stats.totalRuns}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between;">
-                    <span>Total Deaths:</span>
-                    <span>${stats.totalDeaths}</span>
-                </div>
+            <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
+                <span>Best Jumps:</span>
+                <span style="color: #00ff00;">${stats.bestJumps === Infinity ? '--' : stats.bestJumps}</span>
             </div>
-            ${stats.recentRuns.length > 0 ? `
-                <div style="margin-top: 15px;">
-                    <h4 style="margin: 0 0 10px 0; color: #00ff00;">Recent Runs</h4>
-                    ${stats.recentRuns.map(run => `
-                        <div style="background: rgba(0, 255, 0, 0.05); padding: 10px; border-radius: 8px; margin-bottom: 5px;">
-                            <div style="display: flex; justify-content: space-between;">
-                                <span>${this.formatTime(run.time)}</span>
-                                <span>${run.jumps} jumps</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: #aaa;">
-                                <span>${run.deaths} deaths</span>
-                                <span>${new Date(run.date).toLocaleDateString()}</span>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            ` : ''}
+            <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
+                <span>Lowest Deaths:</span>
+                <span style="color: #00ff00;">${stats.lowestDeaths === Infinity ? '--' : stats.lowestDeaths}</span>
+            </div>
+            <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
+                <span>Perfect Runs:</span>
+                <span style="color: #00ff00;">${stats.perfectRuns}</span>
+            </div>
         `;
-        scoreboard.innerHTML = html;
+        scoreboard.appendChild(bestStatsDiv);
+    
+        // Total stats section
+        const totalStatsDiv = document.createElement('div');
+        totalStatsDiv.style.cssText = 'background: rgba(0, 255, 0, 0.05); padding: 15px; border-radius: 10px;';
+        totalStatsDiv.innerHTML = `
+            <h4 style="margin: 0 0 10px 0; color: #00ff00;">Total Stats</h4>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span>Total Runs:</span>
+                <span>${stats.totalRuns}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span>Total Deaths:</span>
+                <span>${stats.totalDeaths}</span>
+            </div>
+        `;
+        scoreboard.appendChild(totalStatsDiv);
+    
+        // Recent runs section (if applicable)
+        if (stats.recentRuns.length > 0) {
+            const recentRunsDiv = document.createElement('div');
+            recentRunsDiv.style.cssText = 'margin-top: 15px;';
+            recentRunsDiv.innerHTML = `
+                <h4 style="margin: 0 0 10px 0; color: #00ff00;">Recent Runs</h4>
+                ${stats.recentRuns.map(run => `
+                    <div style="background: rgba(0, 255, 0, 0.05); padding: 10px; border-radius: 8px; margin-bottom: 5px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>${this.formatTime(run.time)}</span>
+                            <span>${run.jumps} jumps</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: #aaa;">
+                            <span>${run.deaths} deaths</span>
+                            <span>${new Date(run.date).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+            scoreboard.appendChild(recentRunsDiv);
+        }
     },
-
     // Create menu scoreboard UI
     createMenuScoreboardUI() {
         const menuScoreboard = document.createElement('div');
