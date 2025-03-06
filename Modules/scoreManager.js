@@ -5,8 +5,7 @@ const ScoreManager = {
         levels: new Map()
     },
     db: null,
-    dbVersion: 2, // Increment version to force upgrade
-
+    dbVersion: 2, 
     // Initialize IndexedDB
     async initDB() {
         return new Promise((resolve, reject) => {
