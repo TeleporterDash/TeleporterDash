@@ -1,273 +1,300 @@
 // Score Manager for Teleporter Dash
+// Updated to use StorageManager for data operations
+import { warn, error, debug } from "./logManager.js"
+import { StorageManager } from "./storageManager.js"
+
 const ScoreManager = {
-    // Default scores structure using Map
-    scores: {
-        levels: new Map()
-    },
-    db: null,
-    dbVersion: 2, 
-    // Initialize IndexedDB
-    async initDB() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open('TeleporterDashDB', this.dbVersion);
+  // Constants for storage
+  SCORES_KEY: "levelScores",
 
-            request.onerror = (event) => {
-                console.error('IndexedDB error:', event.target.error);
-                reject(event.target.error);
-            };
+  // Default scores structure using Map
+  scores: {
+    levels: new Map(),
+  },
+  // Initialize using StorageManager
+  async initDB() {
+    try {
+      debug("scoreManager", "Initializing StorageManager")
+      if (!StorageManager) {
+        throw new Error("StorageManager is not available")
+      }
+      await StorageManager.initialize()
+      debug("scoreManager", "StorageManager initialized successfully")
+      return true
+    } catch (err) {
+      error("scoreManager", "Error initializing StorageManager:", err)
+      return false
+    }
+  },
 
-            request.onsuccess = (event) => {
-                this.db = event.target.result;
-                console.log('Database opened successfully');
-                resolve();
-            };
+  // Initialize scores from StorageManager or fallback to memory
+  async initialize() {
+    try {
+      debug("scoreManager", "Initializing scores...")
+      await this.initDB()
 
-            request.onupgradeneeded = (event) => {
-                console.log('Database upgrade needed');
-                const db = event.target.result;
-                if (!db.objectStoreNames.contains('scores')) {
-                    const store = db.createObjectStore('scores');
-                    console.log('Scores object store created');
-                }
-            };
-        });
-    },
+      try {
+        debug("scoreManager", "Loading scores from StorageManager")
+        if (!StorageManager) {
+          throw new Error("StorageManager is not available")
+        }
+        const allScores = await StorageManager.getAllScores()
+        this.scores.levels = new Map()
 
-    // Initialize scores from IndexedDB or fallback to memory
-    async initialize() {
+        // Convert the array of scores to a Map
+        if (Array.isArray(allScores)) {
+          allScores.forEach((scoreData) => {
+            this.scores.levels.set(scoreData.levelId, scoreData)
+          })
+          debug("scoreManager", "Scores loaded successfully from StorageManager")
+        } else {
+          throw new Error("Invalid scores data format")
+        }
+      } catch (err) {
+        error("scoreManager", "Error loading scores from StorageManager:", err)
+        this.scores = { levels: new Map() }
+        debug("scoreManager", "Using memory storage fallback for scores")
+      }
+    } catch (err) {
+      error("scoreManager", "Error initializing scores:", err)
+      this.scores = { levels: new Map() }
+    }
+  },
+
+  // Save scores using StorageManager with memory fallback
+  async save() {
+    try {
+      debug("scoreManager", "Saving scores to StorageManager")
+      // First, make sure scores are saved in memory
+      if (!this.scores.levels) {
+        this.scores.levels = new Map()
+      }
+
+      // Check if StorageManager is available
+      if (!StorageManager) {
+        warn("scoreManager", "StorageManager not available, using memory storage only")
+        return
+      }
+
+      // Then save each level's scores to StorageManager
+      for (const [levelId, scoreData] of this.scores.levels) {
         try {
-            console.log('Initializing scores...');
-            await this.initDB();
-            
-            // If database isn't initialized, use memory storage
-            if (!this.db) {
-                console.log('Using memory storage fallback');
-                this.scores = { levels: new Map() };
-                return;
-            }
-
-            try {
-                const transaction = this.db.transaction(['scores'], 'readonly');
-                const store = transaction.objectStore('scores');
-                
-                return new Promise((resolve, reject) => {
-                    const request = store.getAll();
-                    const keysRequest = store.getAllKeys();
-                    
-                    request.onsuccess = () => {
-                        keysRequest.onsuccess = () => {
-                            const scores = request.result;
-                            const keys = keysRequest.result;
-                            this.scores.levels = new Map();
-                            
-                            for (let i = 0; i < scores.length; i++) {
-                                const filename = keys[i];
-                                this.scores.levels.set(filename, scores[i]);
-                            }
-                            console.log('Scores loaded successfully');
-                            resolve();
-                        };
-                    };
-                    
-                    request.onerror = () => {
-                        console.error('Error loading scores:', request.error);
-                        this.scores = { levels: new Map() };
-                        resolve();
-                    };
-                });
-            } catch (error) {
-                console.error('Error accessing scores:', error);
-                this.scores = { levels: new Map() };
-            }
-        } catch (error) {
-            console.error('Error initializing scores:', error);
-            this.scores = { levels: new Map() };
+          // This will create a new entry or update an existing one
+          try {
+            await StorageManager.saveLevel({
+              id: levelId,
+              scoreData: scoreData,
+            })
+            debug("scoreManager", `Saved scores for level ${levelId} using StorageManager`)
+          } catch (err) {
+            warn("scoreManager", `Error saving scores for level ${levelId}:`, err)
+          }
+        } catch (err) {
+          error("scoreManager", `Error saving scores for level ${levelId}:`, err)
         }
-    },
+      }
+    } catch (err) {
+      error("scoreManager", "Error in score save function:", err)
+    }
+  },
 
-    // Save scores to IndexedDB with memory fallback
-    async save() {
-        try {
-            if (!this.db) {
-                console.log('No IndexedDB connection, using memory storage only');
-                return;
-            }
+  // Add a new run for a level
+  async addRun(filename, time, jumps, deaths = 0) {
+    const now = new Date()
 
-            try {
-                const transaction = this.db.transaction(['scores'], 'readwrite');
-                const store = transaction.objectStore('scores');
+    // Create level data if it doesn't exist
+    if (!this.scores.levels.has(filename)) {
+      this.scores.levels.set(filename, {
+        bestTime: Number.POSITIVE_INFINITY,
+        bestJumps: Number.POSITIVE_INFINITY,
+        totalRuns: 0,
+        totalJumps: 0,
+        totalDeaths: 0,
+        perfectRuns: 0, // No deaths
+        runs: [],
+      })
+    }
 
-                for (const [filename, data] of this.scores.levels) {
-                    await new Promise((resolve, reject) => {
-                        const request = store.put(data, filename);
-                        request.onsuccess = () => {
-                            console.log(`Saved scores for level ${filename}`);
-                            resolve();
-                        };
-                        request.onerror = () => {
-                            console.error(`Error saving level ${filename}`);
-                            resolve(); // Still resolve to continue with other levels
-                        };
-                    });
-                }
-                console.log('All scores saved successfully');
-            } catch (error) {
-                console.error('Transaction error:', error);
-                // Continue with memory storage
-            }
-        } catch (error) {
-            console.error('Error saving scores:', error);
-            // Scores remain in memory
+    const levelData = this.scores.levels.get(filename)
+
+    // Add the new run
+    const newRun = {
+      time,
+      jumps,
+      deaths,
+      date: now.toISOString(),
+      perfect: deaths === 0,
+    }
+
+    // Store all runs ever (all-time)
+    if (!Array.isArray(levelData.runs)) levelData.runs = []
+    levelData.runs.unshift(newRun) // Add to beginning
+
+    // Recalculate ALL stats from all runs (all-time)
+    const all = levelData.runs
+    levelData.totalRuns = all.length
+    levelData.totalJumps = all.reduce((sum, r) => sum + (r.jumps || 0), 0)
+    levelData.totalDeaths = all.reduce((sum, r) => sum + (r.deaths || 0), 0)
+    levelData.bestTime = all.length ? Math.min(...all.map((r) => r.time)) : Number.POSITIVE_INFINITY
+    levelData.bestJumps = all.length ? Math.min(...all.map((r) => r.jumps)) : Number.POSITIVE_INFINITY
+    levelData.lowestDeaths = all.length ? Math.min(...all.map((r) => r.deaths)) : Number.POSITIVE_INFINITY
+    levelData.perfectRuns = all.filter((r) => r.deaths === 0).length
+
+    // Save scores using both memory map and StorageManager
+    await this.save()
+
+    // Also use direct StorageManager score saving for redundancy
+    try {
+      try {
+        if (StorageManager.db) {
+          await StorageManager.saveScore(filename, time, jumps, deaths)
+        } else {
+          warn("scoreManager", "StorageManager not available for direct score saving")
         }
-    },
+      } catch (err) {
+        error("scoreManager", `Error saving score via StorageManager for level ${filename}:`, err)
+      }
+    } catch (err) {
+      error("scoreManager", `Error saving score via StorageManager for level ${filename}:`, err)
+    }
+    this.updateScoreboardUI(filename)
+  },
 
-    // Add a new run for a level
-    async addRun(filename, time, jumps, deaths = 0) {
-        if (!this.scores.levels.has(filename)) {
-            this.scores.levels.set(filename, {
-                bestTime: Infinity,
-                bestJumps: Infinity,
-                lowestDeaths: Infinity,
-                perfectRuns: 0,
-                totalDeaths: 0,
-                totalRuns: 0,
-                recentRuns: []
-            });
+  /**
+   * Get stats for a specific level by filename/id
+   * @param {string} levelId - The level ID to get stats for
+   * @returns {Object|null} The level stats or null if not found
+   */
+  getLevelStats(levelId) {
+    debug("scoreManager", `Getting stats for level ${levelId}`)
+    // First try to get from the cached scores
+    if (this.scores.levels.has(levelId)) {
+      const stats = this.scores.levels.get(levelId)
+      if (!Array.isArray(stats.runs)) {
+        stats.runs = []
+      }
+      return stats
+    }
+
+    // If not in cache, try to get from localStorage
+    const scoresData = localStorage.getItem(this.SCORES_KEY)
+    if (scoresData) {
+      try {
+        const parsedScores = JSON.parse(scoresData)
+        if (parsedScores.levels && parsedScores.levels[levelId]) {
+          const stats = parsedScores.levels[levelId]
+          // Upgrade: ensure allRuns is present and includes all runs ever
+          if (!Array.isArray(stats.allRuns)) {
+            stats.allRuns = Array.isArray(stats.runs) ? [...stats.runs] : []
+          }
+          this.scores.levels.set(levelId, stats)
+          return stats
         }
+      } catch (err) {
+        error("scoreManager", "Error parsing scores data:", err)
+      }
+    }
 
-        const level = this.scores.levels.get(filename);
-        const run = {
-            time,
-            jumps,
-            deaths,
-            date: new Date().toISOString()
-        };
+    // Return default stats object if nothing was found
+    return {
+      bestTime: Number.POSITIVE_INFINITY,
+      bestJumps: Number.POSITIVE_INFINITY,
+      lowestDeaths: Number.POSITIVE_INFINITY,
+      perfectRuns: 0,
+      totalDeaths: 0,
+      totalRuns: 0,
+      runs: [],
+    }
+  },
 
-        // Update stats
-        level.totalRuns++;
-        level.totalDeaths += deaths;
-        if (time < level.bestTime) level.bestTime = time;
-        if (jumps < level.bestJumps) level.bestJumps = jumps;
-        if (deaths < level.lowestDeaths) level.lowestDeaths = deaths;
-        if (deaths === 0) level.perfectRuns++;
+  /**
+   * Update the UI scoreboard with level stats
+   * @param {string} levelId - The level ID to update the scoreboard for
+   */
+  updateScoreboardUI(filename) {
+    debug("scoreManager", `Updating scoreboard UI for level ${filename}`)
+    let scoreboard = document.getElementById("scoreboard")
+    if (!scoreboard) {
+      scoreboard = this.createScoreboardUI()
+    }
 
-        // Add to recent runs (keep last 5)
-        level.recentRuns.unshift(run);
-        if (level.recentRuns.length > 5) {
-            level.recentRuns.pop();
-        }
+    const stats = this.getLevelStats(filename) || {}
+    // Defensive fallback for all stats
+    const bestTime =
+      typeof stats.bestTime === "number" && !isNaN(stats.bestTime) ? stats.bestTime : Number.POSITIVE_INFINITY
+    const bestJumps =
+      typeof stats.bestJumps === "number" && !isNaN(stats.bestJumps) ? stats.bestJumps : Number.POSITIVE_INFINITY
+    const lowestDeaths =
+      typeof stats.lowestDeaths === "number" && !isNaN(stats.lowestDeaths)
+        ? stats.lowestDeaths
+        : Number.POSITIVE_INFINITY
+    const perfectRuns = typeof stats.perfectRuns === "number" && !isNaN(stats.perfectRuns) ? stats.perfectRuns : 0
+    const totalRuns = typeof stats.totalRuns === "number" && !isNaN(stats.totalRuns) ? stats.totalRuns : 0
+    const totalDeaths = typeof stats.totalDeaths === "number" && !isNaN(stats.totalDeaths) ? stats.totalDeaths : 0
+    // Show up to 5 most recent runs for display
+    const runs = Array.isArray(stats.runs) ? stats.runs.slice(0, 5) : []
 
-        await this.save();
-        this.updateScoreboardUI(filename);
-    },
+    // Clear existing content
+    scoreboard.innerHTML = ""
 
-    // Get level stats
-    getLevelStats(filename) {
-        return this.scores.levels.get(filename) || {
-            bestTime: Infinity,
-            bestJumps: Infinity,
-            lowestDeaths: Infinity,
-            perfectRuns: 0,
-            totalDeaths: 0,
-            totalRuns: 0,
-            recentRuns: []
-        };
-    },
+    // Create and append the title (h3) using textContent to safely handle filename
+    const title = document.createElement("h3")
+    title.textContent = `${filename} Stats`
+    title.style.cssText = "margin: 0 0 15px 0; color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);"
+    scoreboard.appendChild(title)
 
-    // Format time for display
-    formatTime(time) {
-        return time === Infinity ? '--' : time.toFixed(1) + 's';
-    },
-
-    // Create scoreboard UI
-    createScoreboardUI() {
-        const scoreboard = document.createElement('div');
-        scoreboard.id = 'scoreboard';
-        scoreboard.style.cssText = `
-            position: fixed;
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.6));
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
-            font-family: 'Orbitron', sans-serif;
-            min-width: 250px;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
-            border: 1px solid rgba(0, 255, 0, 0.1);
-            backdrop-filter: blur(10px);
-            z-index: 1000;
-        `;
-        document.body.appendChild(scoreboard);
-        return scoreboard;
-    },
-
-    // Update scoreboard UI
-    updateScoreboardUI(filename) {
-        let scoreboard = document.getElementById('scoreboard');
-        if (!scoreboard) {
-            scoreboard = this.createScoreboardUI();
-        }
-        
-        const stats = this.getLevelStats(filename);
-    
-        // Clear existing content
-        scoreboard.innerHTML = '';
-    
-        // Create and append the title (h3) using textContent to safely handle filename
-        const title = document.createElement('h3');
-        title.textContent = `${filename} Stats`; // Safe: textContent doesn't interpret HTML
-        title.style.cssText = 'margin: 0 0 15px 0; color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);';
-        scoreboard.appendChild(title);
-    
-        // Best stats section
-        const bestStatsDiv = document.createElement('div');
-        bestStatsDiv.style.cssText = 'background: rgba(0, 255, 0, 0.1); padding: 15px; border-radius: 10px; margin-bottom: 15px;';
-        bestStatsDiv.innerHTML = `
+    // Best stats section
+    const bestStatsDiv = document.createElement("div")
+    bestStatsDiv.style.cssText =
+      "background: rgba(0, 255, 0, 0.1); padding: 15px; border-radius: 10px; margin-bottom: 15px;"
+    bestStatsDiv.innerHTML = `
             <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
                 <span>Best Time:</span>
-                <span style="color: #00ff00;">${this.formatTime(stats.bestTime)}</span>
+                <span style="color: #00ff00;">${this.formatTime(bestTime)}</span>
             </div>
             <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
                 <span>Best Jumps:</span>
-                <span style="color: #00ff00;">${stats.bestJumps === Infinity ? '--' : stats.bestJumps}</span>
+                <span style="color: #00ff00;">${bestJumps === Number.POSITIVE_INFINITY ? "--" : bestJumps}</span>
             </div>
             <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
                 <span>Lowest Deaths:</span>
-                <span style="color: #00ff00;">${stats.lowestDeaths === Infinity ? '--' : stats.lowestDeaths}</span>
+                <span style="color: #00ff00;">${lowestDeaths === Number.POSITIVE_INFINITY ? "--" : lowestDeaths}</span>
             </div>
             <div style="margin-bottom: 8px; display: flex; justify-content: space-between;">
                 <span>Perfect Runs:</span>
-                <span style="color: #00ff00;">${stats.perfectRuns}</span>
+                <span style="color: #00ff00;">${perfectRuns}</span>
             </div>
-        `;
-        scoreboard.appendChild(bestStatsDiv);
-    
-        // Total stats section
-        const totalStatsDiv = document.createElement('div');
-        totalStatsDiv.style.cssText = 'background: rgba(0, 255, 0, 0.05); padding: 15px; border-radius: 10px;';
-        totalStatsDiv.innerHTML = `
+        `
+    scoreboard.appendChild(bestStatsDiv)
+
+    // Total stats section
+    const totalStatsDiv = document.createElement("div")
+    totalStatsDiv.style.cssText = "background: rgba(0, 255, 0, 0.05); padding: 15px; border-radius: 10px;"
+    totalStatsDiv.innerHTML = `
             <h4 style="margin: 0 0 10px 0; color: #00ff00;">Total Stats</h4>
             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                 <span>Total Runs:</span>
-                <span>${stats.totalRuns}</span>
+                <span>${totalRuns}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
                 <span>Total Deaths:</span>
-                <span>${stats.totalDeaths}</span>
+                <span>${totalDeaths}</span>
             </div>
-        `;
-        scoreboard.appendChild(totalStatsDiv);
-    
-        // Recent runs section (if applicable)
-        if (stats.recentRuns.length > 0) {
-            const recentRunsDiv = document.createElement('div');
-            recentRunsDiv.style.cssText = 'margin-top: 15px;';
-            recentRunsDiv.innerHTML = `
+        `
+    scoreboard.appendChild(totalStatsDiv)
+
+    // Recent runs section (if applicable)
+    if (runs.length > 0) {
+      const recentRunsDiv = document.createElement("div")
+      recentRunsDiv.style.cssText = "margin-top: 15px; max-height: 270px; overflow-y: auto;"
+      recentRunsDiv.className = "recent-runs-scroll"
+      recentRunsDiv.innerHTML = `
                 <h4 style="margin: 0 0 10px 0; color: #00ff00;">Recent Runs</h4>
-                ${stats.recentRuns.map(run => `
-                    <div style="background: rgba(0, 255, 0, 0.05); padding: 10px; border-radius: 8px; margin-bottom: 5px;">
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                ${runs
+                  .map(
+                    (run) => `
+                    <div style="background: rgba(0, 255, 0, 0.05); padding: 10px; border-radius: 8px;">
                         <div style="display: flex; justify-content: space-between;">
                             <span>${this.formatTime(run.time)}</span>
                             <span>${run.jumps} jumps</span>
@@ -277,17 +304,51 @@ const ScoreManager = {
                             <span>${new Date(run.date).toLocaleDateString()}</span>
                         </div>
                     </div>
-                `).join('')}
-            `;
-            scoreboard.appendChild(recentRunsDiv);
-        }
-    },
+                `,
+                  )
+                  .join("")}
+                </div>
+            `
+      scoreboard.appendChild(recentRunsDiv)
+    }
+  },
 
-    // Create menu scoreboard UI
-    createMenuScoreboardUI() {
-        const menuScoreboard = document.createElement('div');
-        menuScoreboard.id = 'menuScoreboard';
-        menuScoreboard.style.cssText = `
+  // Format time for display
+  formatTime(time) {
+    return time === Number.POSITIVE_INFINITY ? "--" : time.toFixed(1) + "s"
+  },
+
+  // Create scoreboard UI
+  createScoreboardUI() {
+    const scoreboard = document.createElement("div")
+    scoreboard.id = "scoreboard"
+    scoreboard.className = "scoreboard-animate-in"
+    scoreboard.style.cssText = `
+        position: fixed;
+        right: 20px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.6));
+        color: white;
+        padding: 20px;
+        border-radius: 15px;
+        font-family: 'Orbitron', sans-serif;
+        min-width: 250px;
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+        border: 1px solid rgba(0, 255, 0, 0.1);
+        backdrop-filter: blur(10px);
+        z-index: 1000;
+        overflow: visible;
+    `
+    document.body.appendChild(scoreboard)
+    return scoreboard
+  },
+
+  // Create menu scoreboard UI
+  createMenuScoreboardUI() {
+    const menuScoreboard = document.createElement("div")
+    menuScoreboard.id = "menuScoreboard"
+    menuScoreboard.style.cssText = `
             position: fixed;
             right: 20px;
             top: 50%;
@@ -304,55 +365,63 @@ const ScoreManager = {
             border: 1px solid rgba(0, 255, 0, 0.1);
             backdrop-filter: blur(10px);
             z-index: 1000;
-        `;
-        document.body.appendChild(menuScoreboard);
-        return menuScoreboard;
-    },
+        `
+    document.body.appendChild(menuScoreboard)
+    return menuScoreboard
+  },
 
-    // Update menu scoreboard UI
-    updateMenuScoreboardUI() {
-        let menuScoreboard = document.getElementById('menuScoreboard');
-        if (!menuScoreboard) {
-            menuScoreboard = this.createMenuScoreboardUI();
-        }
+  // Update menu scoreboard UI
+  updateMenuScoreboardUI() {
+    debug("scoreManager", "Updating menu scoreboard UI")
+    let menuScoreboard = document.getElementById("menuScoreboard")
+    if (!menuScoreboard) {
+      menuScoreboard = this.createMenuScoreboardUI()
+    }
 
-        let html = '<h2 style="margin: 0 0 20px 0; color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);">Level Statistics</h2>';
-        
-        const levelIds = Array.from(this.scores.levels.keys()).sort((a, b) => {
-            const numA = parseInt(a.replace('level', ''));
-            const numB = parseInt(b.replace('level', ''));
-            return numA - numB;
-        });
+    let html =
+      '<h2 style="margin: 0 0 20px 0; color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);">Level Statistics</h2>'
 
-        for (const levelId of levelIds) {
-            const stats = this.getLevelStats(levelId);
-            html += `
+    const levelIds = Array.from(this.scores.levels.keys()).sort((a, b) => {
+      const numA = Number.parseInt(a.replace("level", ""))
+      const numB = Number.parseInt(b.replace("level", ""))
+      return numA - numB
+    })
+
+    for (const levelId of levelIds) {
+      const stats = this.getLevelStats(levelId)
+      html += `
                 <div style="margin-bottom: 20px; border: 1px solid rgba(0, 255, 0, 0.1); border-radius: 10px; padding: 15px; background: rgba(0, 255, 0, 0.05);">
                     <h3 style="margin: 0 0 10px 0; color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.3);">${levelId}</h3>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                         <div>Best Time: ${this.formatTime(stats.bestTime)}</div>
-                        <div>Best Jumps: ${stats.bestJumps === Infinity ? '--' : stats.bestJumps}</div>
+                        <div>Best Jumps: ${stats.bestJumps === Number.POSITIVE_INFINITY ? "--" : stats.bestJumps}</div>
                         <div>Perfect Runs: ${stats.perfectRuns}</div>
                         <div>Total Deaths: ${stats.totalDeaths}</div>
                     </div>
-                    ${stats.recentRuns.length > 0 ? `
+                    ${
+                      stats.runs.length > 0
+                        ? `
                         <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0, 255, 0, 0.1);">
                             <div style="font-size: 0.9em; color: #00ff00;">Last Run:</div>
                             <div style="display: flex; justify-content: space-between; color: #aaa;">
-                                <span>${this.formatTime(stats.recentRuns[0].time)}</span>
-                                <span>${stats.recentRuns[0].jumps} jumps</span>
-                                <span>${stats.recentRuns[0].deaths} deaths</span>
+                                <span>${this.formatTime(stats.runs[0].time)}</span>
+                                <span>${stats.runs[0].jumps} jumps</span>
+                                <span>${stats.runs[0].deaths} deaths</span>
                             </div>
                         </div>
-                    ` : ''}
+                    `
+                        : ""
+                    }
                 </div>
-            `;
-        }
-
-        if (levelIds.length === 0) {
-            html += '<div style="color: #aaa; text-align: center; padding: 20px;">No levels completed yet</div>';
-        }
-
-        menuScoreboard.innerHTML = html;
+            `
     }
-};
+
+    if (levelIds.length === 0) {
+      html += '<div style="color: #aaa; text-align: center; padding: 20px;">No levels completed yet</div>'
+    }
+
+    menuScoreboard.innerHTML = html
+  },
+}
+
+export { ScoreManager }

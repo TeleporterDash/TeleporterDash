@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Achievement Popup Test</title>
+    <style>
+        body {
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0; /* Ensure no margin */
+            padding: 0; /* Ensure no padding */
+            background: #FFFFFF;
+            color: #000;
+            /* overflow-x: hidden; \/* Prevent horizontal scroll if needed */
+        }
+        button {
+            background: #FFD700;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            margin: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #FFA500;
+        }
+        #status {
+            margin: 20px 0;
+            font-size: 18px;
+        }
+    </style>
+    <script src="External Modules/pixi.js"></script>
+    <script src="External Modules/pixi-filters.js"></script>
+    <script>
+      window.addEventListener('load', () => {
+        if (typeof PIXI === 'undefined') {
+          console.error('PixiJS failed to load');
+        } else {
+          console.log('PixiJS loaded, version:', PIXI.version || 'unknown');
+          console.log('PIXI.Application available:', !!PIXI.Application);
+          console.log('PIXI.filters available:', !!PIXI.filters?.GlowFilter);
+        }
+      });
+    </script>
+</head>
+<body>
+    <h1>Achievement Popup Test</h1>
+    <div id="status">Click buttons to test achievement popups</div>
+    <button onclick="window.testAchievements()">Test All Achievements</button>
+    <button onclick="window.testSingleAchievement('FIRST_WIN')">Test First Win</button>
+    <button onclick="window.testSingleAchievement('FIVE_WINS')">Test Five Wins</button>
+    <button onclick="window.testSingleAchievement('ALL_LEVELS')">Test All Levels</button>
+    <button onclick="window.testSingleAchievement('PERFECT_RUN')">Test Perfect Run</button>
+    <button onclick="window.testSingleAchievement('NO_DEATHS')">Test No Deaths</button>
+    <button onclick="window.testSingleAchievement('HUNDRED_DEATHS')">Test Hundred Deaths</button>
+    <button onclick="window.testSingleAchievement('HUNDRED_LEVELS')">Test Hundred Levels</button>
+
+    <script type="module">
+        // Import the required modules
+        import { popupManager } from './popupManager.js';
+        import { AchievementManager } from './achievementManager.js';
+
+        // Initialize managers and make them available globally
+        window.popupManager = popupManager;
+        window.achievementManager = new AchievementManager();
+
+        // Export functions to global scope
+        window.testAchievements = async function() {
+            const achievements = window.achievementManager.getAllAchievements();
+            for (const achievement of achievements) {
+                await window.testSingleAchievement(achievement.id);
+            }
+        };
+
+        window.testSingleAchievement = async function(achievementId) {
+            const achievement = window.achievementManager.getAllAchievements().find(a => a.id === achievementId);
+            if (!achievement) {
+                document.getElementById('status').textContent = `Achievement ${achievementId} not found!`;
+                return;
+            }
+
+            document.getElementById('status').textContent = `Testing achievement: ${achievement.name}...`;
+            
+            // Unlock achievement
+            window.achievementManager.unlockAchievement(achievementId);
+            
+            // Wait for popup to show
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Wait for popup to close
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            document.getElementById('status').textContent = `Achievement ${achievement.name} test complete!`;
+        };
+
+        // Initialize the page
+        window.addEventListener('load', () => {
+            document.getElementById('status').textContent = 'Ready to test achievements!';
+        });
+    </script>
+</body>
+</html>
