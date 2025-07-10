@@ -8,72 +8,8 @@ import { StorageManager } from "./storageManager.js"
 const STORAGE_KEY = "achievements"
 const LOG_CONTEXT = "achievementManager"
 
-// Achievement definitions - moved to a separate constant
-const ACHIEVEMENTS = {
-  FIRST_WIN: {
-    id: "FIRST_WIN",
-    name: "First Victory",
-    description: "Beat your first level",
-    icon: "firstwin_achievement",
-    points: 10,
-    progress: 0,
-    maxProgress: 1,
-  },
-  FIVE_WINS: {
-    id: "FIVE_WINS",
-    name: "Five Victories",
-    description: "Beat 5 levels",
-    icon: "fivewins_achievement",
-    points: 50,
-    progress: 0,
-    maxProgress: 5,
-  },
-  ALL_LEVELS: {
-    id: "ALL_LEVELS",
-    name: "Master of All",
-    description: "Complete all levels",
-    icon: "alllevels_achievement",
-    points: 100,
-    progress: 0,
-    maxProgress: 10, // Assuming 10 levels
-  },
-  PERFECT_RUN: {
-    id: "PERFECT_RUN",
-    name: "Perfect Run",
-    description: "Beat a level without dying",
-    icon: "perfectrun_achievement",
-    points: 25,
-    progress: 0,
-    maxProgress: 1,
-  },
-  NO_DEATHS: {
-    id: "NO_DEATHS",
-    name: "No Deaths",
-    description: "Complete 5 levels without dying",
-    icon: "nodeaths_achievement",
-    points: 50,
-    progress: 0,
-    maxProgress: 5,
-  },
-  HUNDRED_DEATHS: {
-    id: "HUNDRED_DEATHS",
-    name: "100 Deaths",
-    description: "Die 100 times",
-    icon: "hundreddeaths_achievement",
-    points: 20,
-    progress: 0,
-    maxProgress: 100,
-  },
-  HUNDRED_LEVELS: {
-    id: "HUNDRED_LEVELS",
-    name: "100 Levels",
-    description: "Beat 100 levels",
-    icon: "hundredlevels_achievement",
-    points: 200,
-    progress: 0,
-    maxProgress: 100,
-  },
-}
+// Achievement definitions - moved to a separate json
+// in `import ../JSON/achievements.json` btw
 
 /**
  * Achievement manager class that handles tracking, unlocking and storing achievements

@@ -1,0 +1,107 @@
+.popup {
+position: fixed;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+background: rgba(0, 0, 0, 0.9);
+color: white;
+padding: 20px;
+border-radius: 8px;
+z-index: 1000;
+opacity: 0;
+transition: opacity 0.3s ease-in-out;
+}
+
+.achievement-popup {
+top: 20px;
+right: 0;
+max-width: 300px;
+text-align: center;
+box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+transform: translateX(0);
+}
+
+.error-popup {
+background-color: #ff4d4d;
+max-width: 80%;
+width: 300px;
+box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.error-details {
+background-color: rgba(0, 0, 0, 0.1);
+padding: 10px;
+border-radius: 5px;
+max-height: 100px;
+overflow-y: auto;
+font-size: 0.8em;
+margin-bottom: 15px;
+}
+
+.popup-close {
+position: absolute;
+top: 10px;
+left: 10px;
+width: 24px;
+height: 24px;
+border: none;
+background: none;
+color: #FFD700;
+cursor: pointer;
+padding: 0;
+transition: color 0.2s;
+}
+
+.popup-close:hover {
+color: #FFA500;
+}
+
+.popup-close svg {
+width: 100%;
+height: 100%;
+}
+
+.popup.active {
+opacity: 1;
+}
+
+.popup-header {
+font-size: 1.2em;
+margin-bottom: 10px;
+color: #FFD700;
+}
+
+.achievement-icon {
+margin: 10px 0;
+}
+
+.achievement-icon img {
+width: 64px;
+height: 64px;
+}
+
+.achievement-points {
+color: #FFD700;
+font-weight: bold;
+margin-top: 10px;
+}
+
+.error-popup h2 {
+margin-bottom: 15px;
+font-size: 1.2em;
+}
+
+.error-popup p {
+margin-bottom: 15px;
+font-size: 1em;
+}
+
+.error-popup button {
+background-color: white;
+color: #ff4d4d;
+border: none;
+padding: 10px 20px;
+border-radius: 5px;
+cursor: pointer;
+transition: background-color 0.3s;
+}

@@ -1,0 +1,41 @@
+{
+  "name": "teleporterdash",
+  "version": "1.5.0",
+  "description": "A game I made",
+  "main": "TDMenu.html",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TeleporterDash/TeleporterDash.git"
+  },
+  "keywords": [
+    "game",
+    "indie-game",
+    "custom",
+    "platformer"
+  ],
+  "author": "NellowTCS",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/TeleporterDash/TeleporterDash/issues"
+  },
+  "homepage": "https://github.com/TeleporterDash/TeleporterDash#readme",
+  "dependencies": {
+    "color": "^5.0.0",
+    "contro": "^2.2.0",
+    "gsap": "^3.13.0",
+    "hammerjs": "^2.0.8",
+    "howler": "^2.2.4",
+    "lit-html": "^3.3.0",
+    "localforage": "^1.10.0",
+    "lodash": "^4.17.21",
+    "matter-js": "^0.20.0",
+    "pixi-filters": "^6.1.3",
+    "pixi.js": "^8.11.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

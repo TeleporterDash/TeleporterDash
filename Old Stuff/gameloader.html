@@ -489,7 +489,7 @@
                 const musicPath = this.isSafari() && !levelMusicPath.endsWith('.mp3') 
                     ? levelMusicPath.replace(/\.\w+$/, '.mp3') 
                     : levelMusicPath;
-                const practiceMusicPath = this.isSafari() ? '../Sound/Basic Soundeffects/practicetd.ogg'.replace('.ogg', '.mp3') : '../Sound/Basic Soundeffects/practicetd.ogg';
+                const practiceMusicPath = this.isSafari() ? '../Sound/Basic Soundeffects/practicetd-Dashback.ogg'.replace('.ogg', '.mp3') : '../Sound/Basic Soundeffects/practicetd-Dashback.ogg';
                 const jumpSoundPath = this.isSafari() ? '../Sound/Basic Soundeffects/jumptd.ogg'.replace('.ogg', '.mp3') : '../Sound/Basic Soundeffects/jumptd.ogg';
                 const deathSoundPath = this.isSafari() ? '../Sound/Basic Soundeffects/deathtd.ogg'.replace('.ogg', '.mp3') : '../Sound/Basic Soundeffects/deathtd.ogg';
                 const completionSoundPath = this.isSafari() ? '../Sound/Basic Soundeffects/lvlcompletetd.ogg'.replace('.ogg', '.mp3') : '../Sound/Basic Soundeffects/lvlcompletetd.ogg';
@@ -947,7 +947,7 @@
                     levelMusic = URL.createObjectURL(blob);
                     console.log('LevelMusic: ', levelMusic);
                 } else if (isPracticeMode) {
-                    levelMusic = '../Sound/Basic Soundeffects/practicetd.ogg';
+                    levelMusic = '../Sound/Basic Soundeffects/practicetd-Dashback.ogg';
                     console.log('LevelMusic: ', levelMusic);
                 } else if (data.musicValue && data.musicValue.startsWith('../Sound/Level Soundtracks/')) {
                     levelMusic = `${data.musicValue}`;
