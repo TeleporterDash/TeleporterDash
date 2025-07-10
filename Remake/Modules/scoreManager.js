@@ -1,18 +1,15 @@
 import { html, render } from 'lit-html';
 import { StorageManager } from './storageManager.js';
 import { popupManager } from './popupManager.js';
-import { AchievementsManager } from './achievements.js'; // Assumed singleton instance
-import { LevelUpManager } from './level-up.js';     // Assumed singleton instance
+import { AchievementsManager } from './achievementsSingleton.js';
+import { LevelUpManager } from './levelUpManager.js';
+import { currencyManager } from './currencyManager.js'; // Import singleton
 import { warn, debug } from './logManager.js';
 
 // Singleton instance of ScoreManager
 export const ScoreManager = {
-  // In-memory cache of scores (levelId -> { runs, bestTime, bestJumps, lowestDeaths })
   scores: new Map(),
 
-  /**
-   * Initialize the ScoreManager by loading scores from StorageManager.
-   */
   async initialize() {
     try {
       const allLevelScores = await StorageManager.getAllFromStore('scores');
@@ -25,15 +22,7 @@ export const ScoreManager = {
     }
   },
 
-  /**
-   * Add a new run for a level, update stats, and delegate notifications/achievements.
-   * @param {string} filename - Level identifier
-   * @param {number} time - Time taken in seconds
-   * @param {number} jumps - Number of jumps
-   * @param {number} deaths - Number of deaths (default 0)
-   */
   async addRun(filename, time, jumps, deaths = 0) {
-    // Get or initialize level data
     let levelData = this.scores.get(filename) || {
       levelId: filename,
       runs: [],
@@ -42,30 +31,23 @@ export const ScoreManager = {
       lowestDeaths: Number.POSITIVE_INFINITY
     };
 
-    // Store previous bests for comparison
     const previousBestTime = levelData.bestTime;
     const previousBestJumps = levelData.bestJumps;
     const previousLowestDeaths = levelData.lowestDeaths;
 
-    // Add new run
     const runData = { time, jumps, deaths, timestamp: Date.now() };
     levelData.runs.unshift(runData);
 
-    // Update best stats
     levelData.bestTime = Math.min(levelData.bestTime, time);
     levelData.bestJumps = Math.min(levelData.bestJumps, jumps);
     levelData.lowestDeaths = Math.min(levelData.lowestDeaths, deaths);
 
-    // Update in-memory cache
     this.scores.set(filename, levelData);
-
-    // Persist to storage
     await StorageManager.saveToStore('scores', filename, levelData);
 
-    // Show popups for improvements
     if (time < previousBestTime || previousBestTime === Number.POSITIVE_INFINITY) {
       popupManager.createRegularPopup(
-        `best-time-${filename}`,
+        ` over-best-time-${filename}`,
         html`<div>New Best Time: ${this.formatTime(time)}!</div>`
       );
       popupManager.showPopup(`best-time-${filename}`);
@@ -96,16 +78,17 @@ export const ScoreManager = {
       setTimeout(() => popupManager.hidePopup(`perfect-run-${filename}`), 3000);
     }
 
-    // Delegate to external managers
+    // Calculate and add experience based on performance
+    const baseExperience = Math.max(0, 100 - time + 10 * (10 - jumps) - 20 * deaths);
+    currencyManager.addExperience(baseExperience);
+
+    // Check achievements (may add more experience)
     await AchievementsManager.checkAchievements(filename, runData);
-    await LevelUpManager.checkLevelUp(filename, levelData);
+
+    // Check for level up based on total experience
+    await LevelUpManager.checkLevelUp();
   },
 
-  /**
-   * Get stats for a specific level.
-   * @param {string} filename - Level identifier
-   * @returns {Object|null} - Stats object or null if no data
-   */
   getLevelStats(filename) {
     const levelData = this.scores.get(filename);
     if (!levelData) return null;
@@ -117,10 +100,6 @@ export const ScoreManager = {
     };
   },
 
-  /**
-   * Update the scoreboard UI for a specific level.
-   * @param {string} filename - Level identifier
-   */
   updateScoreboardUI(filename) {
     const stats = this.getLevelStats(filename);
     if (!stats) return;
@@ -128,11 +107,6 @@ export const ScoreManager = {
     render(this.scoreboardTemplate(stats, filename), container);
   },
 
-  /**
-   * Create a container element if it doesn't exist.
-   * @param {string} id - Container ID
-   * @returns {HTMLElement} - Container element
-   */
   createContainer(id) {
     const container = document.createElement('div');
     container.id = id;
@@ -140,12 +114,6 @@ export const ScoreManager = {
     return container;
   },
 
-  /**
-   * Template for rendering the scoreboard.
-   * @param {Object} stats - Level stats
-   * @param {string} filename - Level identifier
-   * @returns {TemplateResult} - lit-html template
-   */
   scoreboardTemplate(stats, filename) {
     return html`
       <div class="scoreboard" style="position: fixed; right: 20px; top: 50%; transform: translateY(-50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 15px;">
@@ -158,18 +126,10 @@ export const ScoreManager = {
     `;
   },
 
-  /**
-   * Format time for display.
-   * @param {number} time - Time in seconds
-   * @returns {string} - Formatted time string
-   */
   formatTime(time) {
     return time === Number.POSITIVE_INFINITY ? 'N/A' : `${time.toFixed(1)}s`;
   },
 
-  /**
-   * Update the menu scoreboard UI showing stats for all levels.
-   */
   async updateMenuScoreboardUI() {
     const allStats = {};
     for (const [filename, data] of this.scores) {
@@ -179,11 +139,6 @@ export const ScoreManager = {
     render(this.menuScoreboardTemplate(allStats), container);
   },
 
-  /**
-   * Template for rendering the menu scoreboard.
-   * @param {Object} allStats - Stats for all levels
-   * @returns {TemplateResult} - lit-html template
-   */
   menuScoreboardTemplate(allStats) {
     const sortedStats = Object.entries(allStats).sort(([a], [b]) => {
       const numA = parseInt(a.replace('level', '')) || 0;

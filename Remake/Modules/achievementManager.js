@@ -1,49 +1,30 @@
-// Modules/achievementManager.js
 import { log, warn, error, debug, setLogLevel } from "./logManager.js";
 import { getSprite } from "./spriteManager.js";
 import AudioManager from "./audioManager.js";
-import { PopupManager } from "./popupManager.js"; // Import PopupManager class
-import ACHIEVEMENTS from '../JSON/achievements.json'; // Import achievements from JSON
-import '../CSS/achievementManager.css'; // Import styles
+import { PopupManager } from "./popupManager.js";
+import { currencyManager } from "./currencyManager.js"; // Import singleton
+import ACHIEVEMENTS from '../JSON/achievements.json';
+import '../CSS/achievementManager.css';
 
-// Constants
 const STORAGE_KEY = "achievements";
 const LOG_CONTEXT = "achievementManager";
 
-/**
- * Achievement manager class that handles tracking, unlocking, and storing achievements
- */
 export class AchievementManager {
-  /**
-   * Create a new AchievementManager instance
-   * @param {Object} options - Configuration options
-   * @param {AudioManager} options.audioManager - Audio manager instance
-   * @param {PopupManager} options.popupManager - Popup manager instance
-   * @param {StorageManager} options.storageManager - Storage manager instance
-   * @param {boolean} options.debugMode - Enable debug mode
-   */
   constructor(options = {}) {
     this.achievements = {};
     this.totalPoints = 0;
     this.unlockedAchievements = new Set();
-
-    // Dependencies injected through constructor for better testability
     this.audioManager = options.audioManager || new AudioManager();
-    this.popupManager = options.popupManager || new PopupManager(); // Default to new instance if not provided
+    this.popupManager = options.popupManager || new PopupManager();
     this.storageManager = options.storageManager;
 
-    // Set log level if debug mode is enabled
     if (options.debugMode) {
       setLogLevel("debug");
     }
 
-    // Initialize achievements
     this.init();
   }
 
-  /**
-   * Initialize the achievement manager
-   */
   async init() {
     try {
       await this.loadAchievements();
@@ -54,10 +35,6 @@ export class AchievementManager {
     }
   }
 
-  /**
-   * Load achievements from storage
-   * @returns {Promise<void>}
-   */
   async loadAchievements() {
     if (!this.storageManager) {
       error(LOG_CONTEXT, "StorageManager not available");
@@ -104,9 +81,6 @@ export class AchievementManager {
     }
   }
 
-  /**
-   * Reset achievements to default values
-   */
   resetAchievements() {
     this.achievements = {};
     this.totalPoints = 0;
@@ -125,10 +99,6 @@ export class AchievementManager {
     debug(LOG_CONTEXT, "Achievements reset to defaults");
   }
 
-  /**
-   * Save achievements to storage
-   * @returns {Promise<void>}
-   */
   async saveAchievements() {
     if (!this.storageManager) {
       error(LOG_CONTEXT, "StorageManager not available");
@@ -143,12 +113,6 @@ export class AchievementManager {
     }
   }
 
-  /**
-   * Update achievement progress
-   * @param {string} achievementId - Achievement identifier
-   * @param {number} progress - Progress to add (defaults to 1)
-   * @returns {boolean} - True if progress was updated successfully
-   */
   updateProgress(achievementId, progress = 1) {
     const achievement = this.achievements[achievementId];
 
@@ -174,11 +138,6 @@ export class AchievementManager {
     return true;
   }
 
-  /**
-   * Unlock an achievement
-   * @param {string} achievementId - Achievement identifier
-   * @returns {boolean} - True if achievement was unlocked
-   */
   unlockAchievement(achievementId) {
     const achievement = this.achievements[achievementId];
 
@@ -195,6 +154,9 @@ export class AchievementManager {
     this.unlockedAchievements.add(achievementId);
     this.totalPoints += achievement.points;
     achievement.progress = achievement.maxProgress;
+
+    // Award experience points when achievement is unlocked
+    currencyManager.addExperience(achievement.points);
 
     try {
       this.audioManager?.playAchievementSound();
@@ -214,11 +176,6 @@ export class AchievementManager {
     return true;
   }
 
-  /**
-   * Get achievement progress
-   * @param {string} achievementId - Achievement identifier
-   * @returns {Object} - Object containing progress and max values
-   */
   getAchievementProgress(achievementId) {
     const achievement = this.achievements[achievementId];
 
@@ -234,55 +191,27 @@ export class AchievementManager {
     };
   }
 
-  /**
-   * Check if an achievement is unlocked
-   * @param {string} achievementId - Achievement identifier
-   * @returns {boolean} - True if achievement is unlocked
-   */
   isUnlocked(achievementId) {
     return this.unlockedAchievements.has(achievementId);
   }
 
-  /**
-   * Get total achievement points
-   * @returns {number} - Total points
-   */
   getTotalPoints() {
     return this.totalPoints;
   }
 
-  /**
-   * Get list of unlocked achievements
-   * @returns {Array} - Array of unlocked achievement objects
-   */
   getUnlockedAchievements() {
     return Array.from(this.unlockedAchievements).map((id) => this.achievements[id]);
   }
 
-  /**
-   * Get all achievements
-   * @returns {Array} - Array of all achievement objects
-   */
   getAllAchievements() {
     return Object.values(this.achievements);
   }
 
-  /**
-   * Get achievement by ID
-   * @param {string} achievementId - Achievement identifier
-   * @returns {Object|null} - Achievement object or null if not found
-   */
   getAchievement(achievementId) {
     return this.achievements[achievementId] || null;
   }
 }
 
-/**
- * Create an achievement UI component for displaying in the game UI
- * @param {Object} achievement - Achievement object
- * @param {boolean} unlocked - Whether the achievement is unlocked
- * @returns {HTMLElement} - Achievement UI component
- */
 export function createAchievementElement(achievement, unlocked = false) {
   const element = document.createElement("div");
   element.className = `achievement-item ${unlocked ? "unlocked" : "locked"}`;

@@ -1,9 +1,8 @@
-// Modules/currencyManager.js (WIP)
 import { debug, setLogLevel } from "./logManager.js"
 import { StorageManager } from "./storageManager.js"
 setLogLevel("debug")
 
-export class CurrencyManager {
+class CurrencyManager {
   constructor() {
     this.coins = 0
     this.diamonds = 0
@@ -16,12 +15,14 @@ export class CurrencyManager {
   addCoins(amount) {
     this.coins += amount
     debug("CurrencyManager", `Added ${amount} coins, total: ${this.coins}`)
+    this.save()
   }
 
   removeCoins(amount) {
     if (this.coins >= amount) {
       this.coins -= amount
       debug("CurrencyManager", `Removed ${amount} coins, total: ${this.coins}`)
+      this.save()
       return true
     }
     return false
@@ -30,12 +31,14 @@ export class CurrencyManager {
   addDiamonds(amount) {
     this.diamonds += amount
     debug("CurrencyManager", `Added ${amount} diamonds, total: ${this.diamonds}`)
+    this.save()
   }
 
   removeDiamonds(amount) {
     if (this.diamonds >= amount) {
       this.diamonds -= amount
       debug("CurrencyManager", `Removed ${amount} diamonds, total: ${this.diamonds}`)
+      this.save()
       return true
     }
     return false
@@ -44,12 +47,14 @@ export class CurrencyManager {
   addExperience(amount) {
     this.experience += amount
     debug("CurrencyManager", `Added ${amount} experience, total: ${this.experience}`)
+    this.save()
   }
 
   removeExperience(amount) {
     if (this.experience >= amount) {
       this.experience -= amount
       debug("CurrencyManager", `Removed ${amount} experience, total: ${this.experience}`)
+      this.save()
       return true
     }
     return false
@@ -58,12 +63,14 @@ export class CurrencyManager {
   addLevel(amount) {
     this.level += amount
     debug("CurrencyManager", `Added ${amount} level, total: ${this.level}`)
+    this.save()
   }
 
   removeLevel(amount) {
     if (this.level >= amount) {
       this.level -= amount
       debug("CurrencyManager", `Removed ${amount} level, total: ${this.level}`)
+      this.save()
       return true
     }
     return false
@@ -83,3 +90,5 @@ export class CurrencyManager {
     this.storageManager.set("level", this.level)
   }
 }
+
+export const currencyManager = new CurrencyManager()
