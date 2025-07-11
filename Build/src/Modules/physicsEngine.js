@@ -37,7 +37,8 @@ class Player {
     this.initialX = x;
     this.initialY = levelHeight * 0.98 - 1; // Position just above floor
     this.levelHeight = levelHeight;
-    this.physicsEngine = physicsEngine; // Reference to PhysicsEngine for body access
+    this.physicsEngine = physicsEngine;
+    this.renderEngine = renderEngine;
     this.reset();
   }
 

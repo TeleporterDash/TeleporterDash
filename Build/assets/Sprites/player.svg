@@ -1,8 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <!-- Player body (fillable, rounded corners, blue fill) -->
-  <rect x="1" y="1" width="30" height="30" rx="6" ry="6" fill="#45b7d1" stroke="#2aa198" stroke-width="2" data-fillable="true"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">
+  <!-- Blue square body -->
+  <rect x="0" y="0" width="30" height="30" rx="4" fill="#2196f3" player-body-fillable="true"/>
+  <!-- Layer on top of blue square -->
+  <rect x="1.5" y="1.5" width="27" height="27" rx="4" fill="#5EB6FF" player-layer-fillable="true"/>
+  <!-- thin outline of left eye (line with rounded top-right) -->
+  <path d="M16.5 3.35 H19.5 Q20 3.35 20 4 Q20 4 20 4 V18.5 H16.5 Z" fill="#000000"/>
+  <!-- Left eye (line with rounded top-right, centered)-->
+  <path d="M17.45 4.4 H19.2 Q19.7 4.4 19.7 4.9 V17.6 H17.45 Z" fill="#00FFC8" player-eye-fillable="true"/>
   
-  <!-- Eyes (looking right, teal, vertically longer) -->
-  <rect x="14" y="8" width="4" height="8" fill="#2aa198"/>
-  <rect x="22" y="8" width="4" height="8" fill="#2aa198"/>
+  <!-- thin outline of right eye (line with rounded top-right) -->
+  <path d="M22.5 3.35 H25.5 Q26 3.35 26 4 Q26 4 26 4 V18.5 H22.5 Z" fill="#000000"/>
+  <!-- Right eye (line with rounded top-right, centered) -->
+  <path d="M23.45 4.4 H25.2 Q25.7 4.4 25.7 4.9 V17.6 H23.45 Z" fill="#00FFC8" player-eye-fillable="true"/>
 </svg>

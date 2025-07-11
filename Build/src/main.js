@@ -124,41 +124,7 @@ async function initializeGameFromMatrix() {
     const matrixInput = document.getElementById('matrixInput').value;
     const parsed = MatrixParser.parse(JSON.parse(matrixInput));
     parsedMatrix = parsed;
-
-    // Only initialize player and physics engine if they don't exist
-    if (!player) {
-        player = new Player(0, 3, parsedMatrix.length);
-    }
-    if (!physicsEngine) {
-        // Create camera manager first if it doesn't exist
-        if (!cameraManager) {
-        cameraManager = new CameraManager(
-            renderEngine.container,
-            parsedMatrix[0].length * blockSize, // level width
-            (parsedMatrix.length + 1) * blockSize, // level height (add 1 for floor)
-            pixiApp.canvas.width,
-            pixiApp.canvas.height
-        );
-        window.cameraManager = cameraManager;
-        }
-
-        // Create physics engine with camera manager
-        physicsEngine = new PhysicsEngine(parsedMatrix, player, renderEngine, audioManager, cameraManager);
-    } else {
-        // Update existing physics engine with new matrix
-        physicsEngine.updateMatrix(parsedMatrix);
-
-        // Update camera manager if it exists
-        if (cameraManager) {
-        cameraManager.setBounds(
-            0,
-            parsedMatrix[0].length * blockSize,
-            0,
-            (parsedMatrix.length + 1) * blockSize
-        );
-        }
-    }
-
+    
     // Initialize render engine if not already initialized
     if (renderEngine) {
         renderEngine.matrix = parsedMatrix;
@@ -196,6 +162,41 @@ async function initializeGameFromMatrix() {
             cameraManager.update();
             }
         };
+        }
+    }
+
+    // Only initialize player and physics engine if they don't exist
+    if (!player) {
+        player = new Player(0, 3, parsedMatrix.length, null, renderEngine); // physicsEngine null for now
+    }
+    
+    if (!physicsEngine) {
+        // Create camera manager first if it doesn't exist
+        if (!cameraManager) {
+        cameraManager = new CameraManager(
+            renderEngine.container,
+            parsedMatrix[0].length * blockSize, // level width
+            (parsedMatrix.length + 1) * blockSize, // level height (add 1 for floor)
+            pixiApp.canvas.width,
+            pixiApp.canvas.height
+        );
+        window.cameraManager = cameraManager;
+        }
+
+        // Create physics engine with camera manager
+        physicsEngine = new PhysicsEngine(parsedMatrix, player, renderEngine, audioManager, cameraManager);
+    } else {
+        // Update existing physics engine with new matrix
+        physicsEngine.updateMatrix(parsedMatrix);
+
+        // Update camera manager if it exists
+        if (cameraManager) {
+        cameraManager.setBounds(
+            0,
+            parsedMatrix[0].length * blockSize,
+            0,
+            (parsedMatrix.length + 1) * blockSize
+        );
         }
     }
 
