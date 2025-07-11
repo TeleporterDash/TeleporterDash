@@ -5,7 +5,7 @@
  * Refactored to use Howler.js for better audio management
  */
 
-import { Howl, Howler } from 'howler'
+import { Howl, Howler } from 'howler';
 import { warn, error, debug, verbose } from "./logManager.js"
 
 export default class AudioManager {
@@ -44,7 +44,7 @@ export default class AudioManager {
    * @param {string} levelMusicPath - Path to the level's music file
    * @returns {Promise} A promise that resolves when initialization is complete
    */
-  async initialize(levelMusicPath = "../Sound/Basic Soundeffects/practicetd-Dashback") {
+  async initialize(levelMusicPath = "../../assets/Sound/Level Soundtracks/practicetd-Dashback") {
     if (this.isInitialized && levelMusicPath) {
       // If already initialized, just update the background music
       await this.updateBackgroundMusic(levelMusicPath)
@@ -56,8 +56,7 @@ export default class AudioManager {
       this.backgroundMusic = new Howl({
         src: [
           `${levelMusicPath}.mp3`,
-          `${levelMusicPath}.ogg`,
-          `${levelMusicPath}.wav`
+          `${levelMusicPath}.ogg`
         ],
         loop: true,
         volume: this.volumes.backgroundMusic,
@@ -85,8 +84,8 @@ export default class AudioManager {
       // Initialize practice music
       this.practiceMusic = new Howl({
         src: [
-          "../Sound/Basic Soundeffects/practicetd-Dashback.mp3",
-          "../Sound/Basic Soundeffects/practicetd-Dashback.ogg"
+          "../../assets/Sound/Basic Soundeffects/practicetd-Dashback.mp3",
+          "../../assets/Sound/Basic Soundeffects/practicetd-Dashback.ogg"
         ],
         loop: true,
         volume: this.volumes.practiceMusic,
@@ -97,8 +96,8 @@ export default class AudioManager {
       // Initialize sound effects
       this.jumpSound = new Howl({
         src: [
-          "../Sound/Basic Soundeffects/jumptd.mp3",
-          "../Sound/Basic Soundeffects/jumptd.ogg"
+          "../../assets/Sound/Basic Soundeffects/jumptd.mp3",
+          "../../assets/Sound/Basic Soundeffects/jumptd.ogg"
         ],
         volume: this.volumes.jumpSound,
         onload: () => debug("audioManager", "Jump sound loaded"),
@@ -107,8 +106,8 @@ export default class AudioManager {
 
       this.deathSound = new Howl({
         src: [
-          "../Sound/Basic Soundeffects/deathtd.mp3",
-          "../Sound/Basic Soundeffects/deathtd.ogg"
+          "../../assets/Sound/Basic Soundeffects/deathtd.mp3",
+          "../../assets/Sound/Basic Soundeffects/deathtd.ogg"
         ],
         volume: this.volumes.deathSound,
         onload: () => debug("audioManager", "Death sound loaded"),
@@ -117,8 +116,8 @@ export default class AudioManager {
 
       this.completionSound = new Howl({
         src: [
-          "../Sound/Basic Soundeffects/lvlcompletetd.mp3",
-          "../Sound/Basic Soundeffects/lvlcompletetd.ogg"
+          "../../assets/Sound/Basic Soundeffects/lvlcompletetd.mp3",
+          "../../assets/Sound/Basic Soundeffects/lvlcompletetd.ogg"
         ],
         volume: this.volumes.completionSound,
         onload: () => debug("audioManager", "Completion sound loaded"),
@@ -127,8 +126,8 @@ export default class AudioManager {
 
       this.achievementSound = new Howl({
         src: [
-          "../Sound/Basic Soundeffects/achievementstd.mp3",
-          "../Sound/Basic Soundeffects/achievementstd.ogg"
+          "../../assets/Sound/Basic Soundeffects/achievementstd.mp3",
+          "../../assets/Sound/Basic Soundeffects/achievementstd.ogg"
         ],
         volume: this.volumes.achievementSound,
         onload: () => debug("audioManager", "Achievement sound loaded"),
@@ -160,8 +159,7 @@ export default class AudioManager {
     this.backgroundMusic = new Howl({
       src: [
         `${levelMusicPath}.mp3`,
-        `${levelMusicPath}.ogg`,
-        `${levelMusicPath}.wav`
+        `${levelMusicPath}.ogg`
       ],
       loop: true,
       volume: this.volumes.backgroundMusic,

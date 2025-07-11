@@ -5,12 +5,12 @@ import { clamp, random, sample } from "lodash"
 import Color from "color"
 import { 
   ShockwaveFilter, 
-  TwistFilter, 
-  DisplacementFilter,
-  NoiseFilter,
+  TwistFilter,
   GlowFilter,
   DropShadowFilter
 } from "pixi-filters"
+import { DisplacementFilter, NoiseFilter } from "pixi.js"
+import * as PIXI from "pixi.js"
 
 // Register GSAP PIXI plugin
 gsap.registerPlugin(PixiPlugin)
@@ -118,26 +118,6 @@ const DISTORTION_CONFIGS = Object.freeze({
 // Utility Functions
 // ========================================================================
 
-/**
- * Enhanced PIXI environment validation
- * @returns {boolean} True if PIXI is available with required features
- */
-function validatePixiEnvironment() {
-  const required = ['Graphics', 'Container', 'Texture', 'Sprite', 'filters']
-  
-  if (!window.PIXI) {
-    error("visualEffectsEngine", "PIXI.js is not loaded")
-    return false
-  }
-
-  const missing = required.filter(component => !window.PIXI[component])
-  if (missing.length > 0) {
-    error("visualEffectsEngine", `Missing PIXI components: ${missing.join(', ')}`)
-    return false
-  }
-
-  return true
-}
 
 /**
  * Creates an optimized ripple displacement texture using PIXI Graphics
@@ -145,10 +125,10 @@ function validatePixiEnvironment() {
  * @returns {PIXI.Texture} The generated texture
  */
 export function createRippleTexture(size = 256) {
-  if (!validatePixiEnvironment()) return null
+  if(!PIXI) return null
 
   try {
-    const graphics = new window.PIXI.Graphics()
+    const graphics = new PIXI.Graphics()
     const center = size / 2
     
     // Create concentric circles for ripple effect
@@ -160,7 +140,7 @@ export function createRippleTexture(size = 256) {
       graphics.fill({ color: 0x8080ff, alpha: alpha * 0.3 })
     }
     
-    const texture = window.PIXI.Texture.from(graphics)
+    const texture = PIXI.Texture.from(graphics)
     texture.source.addressMode = "repeat"
     return texture
   } catch (e) {
@@ -176,7 +156,7 @@ export function createRippleTexture(size = 256) {
  * @returns {PIXI.Sprite} The displacement sprite
  */
 export function createDisplacementSprite(width = 128, height = 128) {
-  if (!validatePixiEnvironment()) return null
+  if(!PIXI) return null
 
   try {
     const canvas = document.createElement("canvas")
@@ -190,7 +170,7 @@ export function createDisplacementSprite(width = 128, height = 128) {
         ctx.fillRect(x, y, 1, 1)
       }
     }
-    const sprite = window.PIXI.Sprite.from(canvas)
+    const sprite = PIXI.Sprite.from(canvas)
     sprite.texture.source.addressMode = "repeat"
     return sprite
   } catch (e) {
@@ -252,7 +232,7 @@ export class DistortionSystem {
     this.timeline = null
     this.originalFilters = null
 
-    if (!validatePixiEnvironment()) {
+    if(!PIXI) {
       error("visualEffectsEngine", "Cannot initialize DistortionSystem: PIXI environment invalid")
       return
     }
@@ -495,12 +475,12 @@ export class ParticleSystem {
    * @param {Object} options - Configuration options
    */
   constructor(parent, options = {}) {
-    if (!validatePixiEnvironment()) {
+    if(!PIXI) {
       error("visualEffectsEngine", "Cannot initialize ParticleSystem: PIXI environment invalid")
       return
     }
 
-    this.container = new window.PIXI.Container()
+    this.container = new PIXI.Container()
     this.container.zIndex = options.zIndex || 10
     this.container.sortableChildren = true
 
@@ -527,7 +507,7 @@ export class ParticleSystem {
    */
   _initializeParticlePool() {
     for (let i = 0; i < this.poolSize; i++) {
-      const particle = new window.PIXI.Graphics()
+      const particle = new PIXI.Graphics()
       particle.visible = false
       particle.zIndex = random(1, 100)
       this.container.addChild(particle)
@@ -548,7 +528,7 @@ export class ParticleSystem {
 
     let particle = this.particlePool.pop()
     if (!particle) {
-      particle = new window.PIXI.Graphics()
+      particle = new PIXI.Graphics()
       particle.zIndex = random(1, 100)
       this.container.addChild(particle)
     }
@@ -812,7 +792,7 @@ export class ParticleSystem {
     debug("visualEffectsEngine", "Cleaning up particle system")
 
     this.activeAnimations.forEach(timeline => timeline.kill())
-    this.activeAnimations.clear()
+    this.activeAnimations.clear();
 
     [...this.particles, ...this.particlePool].forEach(particle => {
       if (particle.parent) {
@@ -955,7 +935,7 @@ export class EffectManager {
  * @param {EffectManager} effectManager - Effect manager instance
  */
 export function applyVisualEffects(sprite, appearance, effectManager) {
-  if (!validatePixiEnvironment() || !sprite || !appearance) {
+  if (!PIXI || !sprite || !appearance) {
     warn("visualEffectsEngine", "Cannot apply visual effects: invalid input")
     return
   }
@@ -1019,16 +999,16 @@ export function applyVisualEffects(sprite, appearance, effectManager) {
   try {
     switch (blendMode.toLowerCase()) {
       case "add":
-        sprite.blendMode = window.PIXI.BLEND_MODES.ADD
+        sprite.blendMode = PIXI.BLEND_MODES.ADD
         break
       case "multiply":
-        sprite.blendMode = window.PIXI.BLEND_MODES.MULTIPLY
+        sprite.blendMode = PIXI.BLEND_MODES.MULTIPLY
         break
       case "screen":
-        sprite.blendMode = window.PIXI.BLEND_MODES.SCREEN
+        sprite.blendMode = PIXI.BLEND_MODES.SCREEN
         break
       default:
-        sprite.blendMode = window.PIXI.BLEND_MODES.NORMAL
+        sprite.blendMode = PIXI.BLEND_MODES.NORMAL
     }
     debug("visualEffectsEngine", `Applied blend mode ${blendMode}`)
   } catch (e) {
@@ -1064,7 +1044,7 @@ export function applyVisualEffects(sprite, appearance, effectManager) {
  * @param {number} deltaTime - Delta time in milliseconds
  */
 export function updateVisualEffects(sprites, deltaTime) {
-  if (!validatePixiEnvironment()) return
+  if (!PIXI) return
 
   sprites.forEach(sprite => {
     // Update distortion effects via DistortionSystem
@@ -1085,6 +1065,5 @@ export {
   PARTICLE_CONFIGS,
   DISTORTION_CONFIGS,
   interpolateColor,
-  getRandomColor,
-  validatePixiEnvironment
+  getRandomColor
 }

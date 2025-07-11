@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="10" height="32" viewBox="0 0 10 32">
+  <!-- Green rounded block background -->
+  <rect x="1" y="1" width="8" height="30" rx="2" ry="2" fill="#4caf50" stroke="#2e7d32" stroke-width="2" data-fillable="true" />
+</svg>

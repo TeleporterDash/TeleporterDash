@@ -1,6 +1,7 @@
 // Modules/spriteManager.js
 import { hexToHSL, hslToHex, blendColors } from "./colorUtils.js"
 import { warn, error, debug, verbose } from "./logManager.js"
+import { Sprite, Assets } from 'pixi.js';
 
 const COLOR_MAP = {
   0: "#000000",
@@ -179,7 +180,7 @@ export async function loadSprites(directory) {
         "Loading assets into PixiJS Asset cache:",
         assetsToLoad.map((asset) => asset.alias),
       )
-      await window.PIXI.Assets.load(assetsToLoad)
+      await Assets.load(assetsToLoad)
       verbose(
         "spriteManager",
         "All sprites preloaded into PixiJS Assets cache:",
@@ -207,14 +208,14 @@ export async function getFloorSprite(spriteMap) {
 
   try {
     // Use existing cached texture if possible
-    if (window.PIXI.Assets.cache.has(assetId)) {
-      texture = window.PIXI.Assets.get(assetId)
+    if (Assets.cache.has(assetId)) {
+      texture = Assets.get(assetId)
       verbose("spriteManager", "Using cached floor texture")
     } else {
       debug("spriteManager", "Floor texture not found in cache, creating new texture")
       const dataUrl = `data:image/svg+xml;base64,${btoa(svg)}`
-      await window.PIXI.Assets.load({ alias: assetId, src: dataUrl })
-      texture = window.PIXI.Assets.get(assetId)
+      await Assets.load({ alias: assetId, src: dataUrl })
+      texture = Assets.get(assetId)
     }
 
     if (!texture) {
@@ -226,7 +227,7 @@ export async function getFloorSprite(spriteMap) {
     return null
   }
 
-  const sprite = new window.PIXI.Sprite(texture)
+  const sprite = new Sprite(texture)
   debug("spriteManager", "Successfully created floor sprite")
   // Store the asset ID on the sprite for cleanup
   sprite.assetId = assetId
@@ -236,12 +237,12 @@ export async function getFloorSprite(spriteMap) {
       // Only unload if explicitly asked to
       if (options && options.removeTextures) {
         // Use unload instead of remove as per PixiJS warning
-        if (window.PIXI.Assets.unload) {
-          window.PIXI.Assets.unload(this.assetId || assetId)
+        if (Assets.unload) {
+          Assets.unload(this.assetId || assetId)
         } else {
           // Fallback for older versions
-          window.PIXI.utils.TextureCache[this.assetId || assetId] = null
-          delete window.PIXI.utils.TextureCache[this.assetId || assetId]
+          PIXI.utils.TextureCache[this.assetId || assetId] = null
+          delete PIXI.utils.TextureCache[this.assetId || assetId]
         }
       }
 
@@ -269,11 +270,11 @@ export async function getSprite(type, spriteMap, colorData = {}) {
     const coloredDataUrl = `data:image/svg+xml;base64,${btoa(coloredSvg)}`
 
     const coloredAssetId = `${assetId}_colored_${colorData.base}_${colorData.tint}_${colorData.tintIntensity}`
-    if (!window.PIXI.Assets.cache.has(coloredAssetId)) {
-      await window.PIXI.Assets.load({ alias: coloredAssetId, src: coloredDataUrl })
+    if (!Assets.cache.has(coloredAssetId)) {
+      await Assets.load({ alias: coloredAssetId, src: coloredDataUrl })
     }
 
-    texture = window.PIXI.Assets.get(coloredAssetId)
+    texture = Assets.get(coloredAssetId)
     if (!texture) {
       error("spriteManager", `Colored asset ${coloredAssetId} not found in PixiJS Assets cache`)
       return null
@@ -286,7 +287,7 @@ export async function getSprite(type, spriteMap, colorData = {}) {
     return null
   }
 
-  const sprite = new window.PIXI.Sprite(texture)
+  const sprite = new Sprite(texture)
   sprite.anchor.set(0.5)
 
   // Store the asset ID on the sprite for cleanup
@@ -304,19 +305,19 @@ export async function getSprite(type, spriteMap, colorData = {}) {
           const assetId = this.assetId || texture.assetId
           if (
             assetId &&
-            window.PIXI.Assets.cache &&
-            window.PIXI.Assets.cache.has &&
-            window.PIXI.Assets.cache.has(assetId)
+            Assets.cache &&
+            Assets.cache.has &&
+            Assets.cache.has(assetId)
           ) {
             debug("spriteManager", `Unloading asset from cache: ${assetId}`)
 
             // Use unload instead of remove as per PixiJS warning
-            if (window.PIXI.Assets.unload) {
-              window.PIXI.Assets.unload(assetId)
+            if (Assets.unload) {
+              Assets.unload(assetId)
             } else {
               // Fallback for older versions
-              window.PIXI.utils.TextureCache[assetId] = null
-              delete window.PIXI.utils.TextureCache[assetId]
+              PIXI.utils.TextureCache[assetId] = null
+              delete PIXI.utils.TextureCache[assetId]
             }
           }
         } catch (err) {
@@ -350,11 +351,11 @@ export async function getPlayerSprite(spriteMap, color = "#ffffff") {
     const coloredDataUrl = `data:image/svg+xml;base64,${btoa(coloredSvg)}`
 
     const coloredAssetId = `player_colored_${color}`
-    if (!window.PIXI.Assets.cache.has(coloredAssetId)) {
-      await window.PIXI.Assets.load({ alias: coloredAssetId, src: coloredDataUrl })
+    if (!Assets.cache.has(coloredAssetId)) {
+      await Assets.load({ alias: coloredAssetId, src: coloredDataUrl })
     }
 
-    texture = window.PIXI.Assets.get(coloredAssetId)
+    texture = Assets.get(coloredAssetId)
     if (!texture) {
       error("spriteManager", `Colored asset ${coloredAssetId} not found in PixiJS Assets cache`)
       return null
@@ -364,7 +365,7 @@ export async function getPlayerSprite(spriteMap, color = "#ffffff") {
     return null
   }
 
-  const sprite = new window.PIXI.Sprite(texture)
+  const sprite = new Sprite(texture)
   sprite.anchor.set(0.5)
 
   // Override destroy method to properly clean up textures from cache
@@ -382,19 +383,19 @@ export async function getPlayerSprite(spriteMap, color = "#ffffff") {
           const assetId = this.assetId
           if (
             assetId &&
-            window.PIXI.Assets.cache &&
-            window.PIXI.Assets.cache.has &&
-            window.PIXI.Assets.cache.has(assetId)
+            Assets.cache &&
+            Assets.cache.has &&
+            Assets.cache.has(assetId)
           ) {
             debug("spriteManager", `Unloading player asset from cache: ${assetId}`)
 
             // Use unload instead of remove as per PixiJS warning
-            if (window.PIXI.Assets.unload) {
-              window.PIXI.Assets.unload(assetId)
+            if (Assets.unload) {
+              Assets.unload(assetId)
             } else {
               // Fallback for older versions
-              window.PIXI.utils.TextureCache[assetId] = null
-              delete window.PIXI.utils.TextureCache[assetId]
+              PIXI.utils.TextureCache[assetId] = null
+              delete PIXI.utils.TextureCache[assetId]
             }
           }
         } catch (err) {

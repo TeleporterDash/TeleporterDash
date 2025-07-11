@@ -6,6 +6,8 @@ import { updateAnimations, pregenerateTextures, clearTextureCache, getTextureCac
 import { hexToNumber } from "./colorUtils.js";
 import { warn, error, debug, verbose, setLogLevel } from "./logManager.js";
 import { map, flatMap, filter } from "lodash";
+import { Container, Graphics, Text, Assets } from "pixi.js";
+
 
 setLogLevel("debug");
 
@@ -13,7 +15,7 @@ export class RenderEngine {
   constructor(pixiApp, blockSize) {
     this.pixiApp = pixiApp;
     this.blockSize = blockSize;
-    this.container = new window.PIXI.Container();
+    this.container = new Container();
     this.container.sortableChildren = true;
     this.pixiApp.stage.addChild(this.container);
     this.blockSprites = [];
@@ -164,9 +166,9 @@ export class RenderEngine {
       textureAssets.push({ alias: cacheKey, src });
     }
     if (textureAssets.length > 0) {
-      await window.PIXI.Assets.load(textureAssets);
+      await Assets.load(textureAssets);
       for (const { alias } of textureAssets) {
-        cache.set(alias, window.PIXI.Assets.get(alias));
+        cache.set(alias, Assets.get(alias));
       }
       debug("renderEngine", "Preloaded animation textures:", map(textureAssets, "alias"));
     }
@@ -185,11 +187,11 @@ export class RenderEngine {
       if (object.isModifier && object.modifierType) {
         sprite = await getSprite(object.modifierType, spriteMap, { skipColorize: true });
         if (!sprite) {
-          sprite = new window.PIXI.Graphics()
+          sprite = new Graphics()
             .circle(0, 0, this.blockSize * 0.4)
             .fill({ color: 0x8888ff, alpha: 0.7 })
             .stroke({ width: 2, color: 0xffffff, alpha: 0.9 });
-          const text = new window.PIXI.Text(String(object.modifierType - 20), {
+          const text = new Text(String(object.modifierType - 20), {
             fontFamily: "Arial",
             fontSize: this.blockSize * 0.4,
             fill: 0xffffff,
@@ -202,7 +204,7 @@ export class RenderEngine {
         sprite = await getSprite(object.type, spriteMap, object.appearance?.color || { base: "#888", tint: "0", tintIntensity: 0 });
         if (!sprite) {
           warn("renderEngine", `No sprite for block type ${object.type} at [${x / this.blockSize},${y / this.blockSize}]`);
-          sprite = new window.PIXI.Graphics()
+          sprite = new Graphics()
             .rect(-this.blockSize / 2, -this.blockSize / 2, this.blockSize, this.blockSize)
             .fill({ color: hexToNumber(object.appearance?.color?.base || "#888") });
         }

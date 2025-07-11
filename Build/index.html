@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Teleporter Dash Test</title>
+  <link rel="stylesheet" href="/src/CSS/main.css">
+</head>
+
+<body>
+  <div id="gameContainer">
+    <canvas id="levelCanvas"></canvas>
+    <div id="score">Score: 0</div>
+    <div id="pauseMenu">
+      <h2>Game Paused</h2>
+      <button onclick="window.togglePause()">Resume</button>
+      <button onclick="window.restartGame()">Restart</button>
+      <button onclick="window.toggleMute()">Mute</button>
+    </div>
+  </div>
+  <div id="pauseMenu">
+    <div id="pauseTitle">Game Paused</div>
+    <div id="pauseButtons">
+      <button onclick="window.togglePause()">Resume</button>
+      <button onclick="window.handleGameOver('menu')">Back to Menu</button>
+    </div>
+  </div>
+  <div id="gameOverScreen">
+    <div id="gameOverTitle">Game Over</div>
+    <div id="gameOverButtons">
+      <button onclick="window.handleGameOver('restart')">Try Again</button>
+      <button onclick="window.handleGameOver('menu')">Back to Menu</button>
+    </div>
+  </div>
+  <div id="uiPanel">
+    <div class="ui-group">
+      <label for="matrixInput">Level Matrix (JSON):</label>
+      <textarea id="matrixInput">[
+        ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+        ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+        ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+        ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+        ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+        ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+        ["0","0","0","0","T:1/TR:[@0|2.0|h]/AP:[C:[#0000FF|0|0|0|0|0]|0|0|0|0|0|0.5|0|0|normal|0|0]/G:1","T:2/TR:[@180|1.0|h]/AP:[C:[#FF0000|0|0|0|0|0]|0|0|0|0|0|1.0|0|0|normal|0|0]/AN:[1|0.2|0]","I:PORT1/T:7/AP:[C:[#FF00FF|0|0|0|0|0]|#FF00FF|5|0|0|0|0.8|0|0|normal|0|0]/L:1","I:PORT1/T:8/AP:[C:[#FF00FF|0|0|0|0|0]|#FF00FF|5|0|0|0|0.8|0|0|normal|0|0]/L:1","0","0","0","0","0","0","0"],
+        ["0","0","0","0","T:5/AP:[C:[#FFFF00|0|0|0|0|0]|0|0|0|0|0|1.0|0|0|normal|0|0]","T:6/AP:[C:[#00FFFF|0|0|0|0|0]|0|0|0|0|0|1.0|0|0|normal|0|0]","T:1/AP:[C:[#00FF00|0|0|0|0|0]|0|0|0|0|0|1.0|0|0|normal|0|0]","T:4/AP:[C:[#FFFFFF|0|0|0|0|0]|0|0|0|0|0|1.0|0|0|normal|0|0]","T:11/AP:[C:[#FF0000|0|0|0|0|0]|0|0|0|0|0|1.0|0|0|normal|0|0]","T:12/AP:[C:[#00FF00|0|0|0|0|0]|0|0|0|0|0|1.0|0|0|normal|0|0]","0","0","0","0"]
+      ]</textarea>
+    </div>
+    <div class="ui-group">
+      <label for="matrixOutput">Parsed Matrix (JSON):</label>
+      <textarea id="matrixOutput" readonly></textarea>
+    </div>
+    <div class="controls">
+      <button onclick="window.restartGame()">Restart</button>
+      <button onclick="window.togglePause()">Pause</button>
+      <button onclick="window.startLevel()">Start Level</button>
+      <button id="applyMatrixButton" onclick="window.handleApplyMatrixClick()" disabled>Apply Matrix</button>
+      <div class="music-controls">
+        <label>
+          <input type="checkbox" id="restartOnDeath" onchange="window.toggleMusicOnDeath(this.checked)" checked>
+          Restart Music on Death
+        </label>
+        <label>
+          <input type="checkbox" id="restartOnCompletion" onchange="window.toggleMusicOnCompletion(this.checked)"
+            checked>
+          Restart Music on Completion
+        </label>
+      </div>
+      <div class="music-controls">
+        <label>
+          <input type="checkbox" id="autoRestart" onchange="window.toggleAutoRestart(this.checked)" checked>
+          Auto Restart on Death
+        </label>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+
+</html>
