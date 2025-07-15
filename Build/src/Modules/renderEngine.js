@@ -411,7 +411,7 @@ export class RenderEngine {
   updatePlayerPosition(player, rotation) {
     if (!this.playerSprite) return;
     this.setSpriteTransform(this.playerSprite, { ...player, rotation }, { xOffset: 0.5, yOffset: 0.75 });
-    verbose("renderEngine", `Player position updated: x=${player.x}, y=${player.y}, visualY=${player.y + 0.75}, rotation=${rotation || player.rotation || 0}`);
+    debug("renderEngine", `Player position updated: x=${player.x}, y=${player.y}, visualY=${player.y + 0.75}, rotation=${rotation || player.rotation || 0}`);
   }
 
   /**

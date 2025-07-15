@@ -17,7 +17,7 @@ window.audioManager = new AudioManager();
 window.autoRestart = true; // Default to auto restart
 
 // Now we can set the log level after importing it
-setLogLevel('verbose');
+setLogLevel('debug');
 
 // Global variables (all initialized through window object)
 window.pixiApp = null;
@@ -193,8 +193,25 @@ async function initializeGameFromMatrix() {
     }
     
     // Only initialize player if it doesn't exist
+    if (!physicsEngine) {
+        // Create physics engine with camera manager
+        physicsEngine = new PhysicsEngine(parsedMatrix, null, renderEngine, audioManager, cameraManager);
+    } else {
+        // Update existing physics engine with new matrix
+        physicsEngine.updateMatrix(parsedMatrix);
+
+        // Update camera manager if it exists
+        if (cameraManager) {
+        cameraManager.setBounds(
+            0,
+            parsedMatrix[0].length * blockSize,
+            0,
+            (parsedMatrix.length + 1) * blockSize
+        );
+        }
+    }
     if (!player) {
-        player = new Player(0, 3, parsedMatrix.length, physicsEngine); // physicsEngine null for now
+        player = new Player(0, 3, parsedMatrix.length, physicsEngine);
         player.renderEngine = renderEngine;
     }
     
