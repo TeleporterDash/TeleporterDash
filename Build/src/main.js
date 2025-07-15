@@ -1,4 +1,3 @@
-
 import { log, warn, error, debug, verbose, setLogLevel } from './Modules/logManager.js';
 import AudioManager from './Modules/audioManager.js';
 import { MatrixParser } from './Modules/matrixParser.js';
@@ -18,7 +17,7 @@ window.audioManager = new AudioManager();
 window.autoRestart = true; // Default to auto restart
 
 // Now we can set the log level after importing it
-setLogLevel('debug');
+setLogLevel('verbose');
 
 // Global variables (all initialized through window object)
 window.pixiApp = null;
@@ -59,6 +58,7 @@ async function initPixi() {
         backgroundColor: 0x222222,
         antialias: true,
         autoStart: true,
+        useBackBuffer: true,
       });
     }
 
@@ -70,7 +70,7 @@ async function initPixi() {
     
     // Load sprite assets if not already loaded
     if (!spriteMap) {
-        spriteMap = await loadSprites('../assets/Sprites');
+        spriteMap = await loadSprites('/assets/Sprites');
     }
 
     if (spriteMap.has('floor')) {
@@ -83,6 +83,7 @@ async function initPixi() {
     if (!renderEngine) {
         renderEngine = new RenderEngine(pixiApp, blockSize);
         setRenderEngine(renderEngine);
+        renderEngine.setAudioManager(audioManager);
         // Get the particle system from renderEngine
         particleSystem = renderEngine.particleSystem;
     }
@@ -138,11 +139,6 @@ async function initializeGameFromMatrix() {
         renderEngine.renderFloor();
         }
 
-        // Only render player if it doesn't exist
-        if (!renderEngine.playerSprite) {
-        renderEngine.renderPlayer(player);
-        }
-
         // Camera manager is now initialized earlier with physics engine
         if (cameraManager) {
         // Position initial camera view to show floor at bottom
@@ -165,14 +161,8 @@ async function initializeGameFromMatrix() {
         }
     }
 
-    // Only initialize player and physics engine if they don't exist
-    if (!player) {
-        player = new Player(0, 3, parsedMatrix.length, null, renderEngine); // physicsEngine null for now
-    }
-    
-    if (!physicsEngine) {
-        // Create camera manager first if it doesn't exist
-        if (!cameraManager) {
+    // Create camera manager first if it doesn't exist
+    if (!cameraManager) {
         cameraManager = new CameraManager(
             renderEngine.container,
             parsedMatrix[0].length * blockSize, // level width
@@ -181,8 +171,10 @@ async function initializeGameFromMatrix() {
             pixiApp.canvas.height
         );
         window.cameraManager = cameraManager;
-        }
+    }
 
+    // Only initialize physics engine if it doesn't exist
+    if (!physicsEngine) {
         // Create physics engine with camera manager
         physicsEngine = new PhysicsEngine(parsedMatrix, player, renderEngine, audioManager, cameraManager);
     } else {
@@ -198,6 +190,16 @@ async function initializeGameFromMatrix() {
             (parsedMatrix.length + 1) * blockSize
         );
         }
+    }
+    
+    // Only initialize player if it doesn't exist
+    if (!player) {
+        player = new Player(0, 3, parsedMatrix.length, physicsEngine); // physicsEngine null for now
+        player.renderEngine = renderEngine;
+    }
+    
+    if (physicsEngine && !renderEngine.playerSprite) {
+        renderEngine.renderPlayer(player);
     }
 
     // Only start game loop if it hasn't been started

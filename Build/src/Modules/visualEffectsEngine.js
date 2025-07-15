@@ -9,8 +9,8 @@ import {
   GlowFilter,
   DropShadowFilter
 } from "pixi-filters"
-import { DisplacementFilter, NoiseFilter } from "pixi.js"
-import * as PIXI from "pixi.js"
+import { DisplacementFilter, NoiseFilter, Application, Graphics,  Assets, Container, Sprite, Text, Texture } from 'pixi.js';
+import 'pixi.js/advanced-blend-modes';
 
 // Register GSAP PIXI plugin
 gsap.registerPlugin(PixiPlugin)
@@ -122,13 +122,13 @@ const DISTORTION_CONFIGS = Object.freeze({
 /**
  * Creates an optimized ripple displacement texture using PIXI Graphics
  * @param {number} size - Texture size (default: 256)
- * @returns {PIXI.Texture} The generated texture
+ * @returns {Application.Texture} The generated texture
  */
 export function createRippleTexture(size = 256) {
-  if(!PIXI) return null
+  if(!Application) return null
 
   try {
-    const graphics = new PIXI.Graphics()
+    const graphics = new Graphics()
     const center = size / 2
     
     // Create concentric circles for ripple effect
@@ -140,7 +140,7 @@ export function createRippleTexture(size = 256) {
       graphics.fill({ color: 0x8080ff, alpha: alpha * 0.3 })
     }
     
-    const texture = PIXI.Texture.from(graphics)
+    const texture = Texture.from(graphics)
     texture.source.addressMode = "repeat"
     return texture
   } catch (e) {
@@ -153,10 +153,10 @@ export function createRippleTexture(size = 256) {
  * Creates a noise displacement texture for displacement effects
  * @param {number} width - Texture width (default: 128)
  * @param {number} height - Texture height (default: 128)
- * @returns {PIXI.Sprite} The displacement sprite
+ * @returns {Application.Sprite} The displacement sprite
  */
 export function createDisplacementSprite(width = 128, height = 128) {
-  if(!PIXI) return null
+  if(!Application) return null
 
   try {
     const canvas = document.createElement("canvas")
@@ -170,7 +170,7 @@ export function createDisplacementSprite(width = 128, height = 128) {
         ctx.fillRect(x, y, 1, 1)
       }
     }
-    const sprite = PIXI.Sprite.from(canvas)
+    const sprite = Sprite.from(canvas)
     sprite.texture.source.addressMode = "repeat"
     return sprite
   } catch (e) {
@@ -217,7 +217,7 @@ function getRandomColor(palette = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '
 export class DistortionSystem {
   /**
    * Creates a new distortion effect
-   * @param {PIXI.Sprite} sprite - Target sprite
+   * @param {Application.Sprite} sprite - Target sprite
    * @param {string} type - Effect type ('wave', 'ripple', 'twist', 'noise', 'displacement')
    * @param {number} intensity - Effect intensity (0-3)
    * @param {Object} options - Additional options
@@ -232,7 +232,7 @@ export class DistortionSystem {
     this.timeline = null
     this.originalFilters = null
 
-    if(!PIXI) {
+    if(!Application) {
       error("visualEffectsEngine", "Cannot initialize DistortionSystem: PIXI environment invalid")
       return
     }
@@ -475,12 +475,12 @@ export class ParticleSystem {
    * @param {Object} options - Configuration options
    */
   constructor(parent, options = {}) {
-    if(!PIXI) {
+    if(!Application) {
       error("visualEffectsEngine", "Cannot initialize ParticleSystem: PIXI environment invalid")
       return
     }
 
-    this.container = new PIXI.Container()
+    this.container = new Container()
     this.container.zIndex = options.zIndex || 10
     this.container.sortableChildren = true
 
@@ -507,7 +507,7 @@ export class ParticleSystem {
    */
   _initializeParticlePool() {
     for (let i = 0; i < this.poolSize; i++) {
-      const particle = new PIXI.Graphics()
+      const particle = new Graphics()
       particle.visible = false
       particle.zIndex = random(1, 100)
       this.container.addChild(particle)
@@ -518,7 +518,7 @@ export class ParticleSystem {
   /**
    * Get particle from pool with smart recycling
    * @private
-   * @returns {PIXI.Graphics} Particle object
+   * @returns {Application.Graphics} Particle object
    */
   _getParticle() {
     if (this.particles.length >= this.maxParticles) {
@@ -528,7 +528,7 @@ export class ParticleSystem {
 
     let particle = this.particlePool.pop()
     if (!particle) {
-      particle = new PIXI.Graphics()
+      particle = new Graphics()
       particle.zIndex = random(1, 100)
       this.container.addChild(particle)
     }
@@ -541,7 +541,7 @@ export class ParticleSystem {
   /**
    * Return particle to pool
    * @private
-   * @param {PIXI.Graphics} particle - Particle to recycle
+   * @param {Application.Graphics} particle - Particle to recycle
    */
   _recycleParticle(particle) {
     if (!particle) return
@@ -566,7 +566,7 @@ export class ParticleSystem {
 
   /**
    * Emit particles with GSAP animations
-   * @param {PIXI.Sprite} sprite - Source sprite
+   * @param {Application.Sprite} sprite - Source sprite
    * @param {string} type - Particle type
    * @param {number} intensity - Emission intensity
    * @param {Object} options - Additional options
@@ -592,7 +592,7 @@ export class ParticleSystem {
   /**
    * Create individual particle with GSAP animation
    * @private
-   * @param {PIXI.Sprite} sprite - Source sprite
+   * @param {Application.Sprite} sprite - Source sprite
    * @param {Object} config - Particle configuration
    * @param {number} intensity - Intensity multiplier
    * @param {string} customColor - Custom color override
@@ -664,7 +664,7 @@ export class ParticleSystem {
 
   /**
    * Create explosion effect with enhanced visuals
-   * @param {PIXI.Sprite|Object} target - Target sprite or position
+   * @param {Application.Sprite|Object} target - Target sprite or position
    * @param {Object} options - Explosion options
    */
   createExplosion(target, options = {}) {
@@ -833,7 +833,7 @@ export class EffectManager {
   /**
    * Create a new particle system
    * @param {string} name - System name
-   * @param {PIXI.Container} parent - Parent container
+   * @param {Application.Container} parent - Parent container
    * @param {Object} options - Configuration options
    * @returns {ParticleSystem} Created particle system
    */
@@ -851,7 +851,7 @@ export class EffectManager {
   /**
    * Create a new distortion effect
    * @param {string} name - Effect name
-   * @param {PIXI.Sprite} sprite - Target sprite
+   * @param {Application.Sprite} sprite - Target sprite
    * @param {string} type - Effect type
    * @param {number} intensity - Effect intensity
    * @param {Object} options - Additional options
@@ -930,12 +930,12 @@ export class EffectManager {
 
 /**
  * Apply visual effects to a sprite
- * @param {PIXI.Sprite} sprite - Target sprite
+ * @param {Application.Sprite} sprite - Target sprite
  * @param {Object} appearance - Appearance configuration
  * @param {EffectManager} effectManager - Effect manager instance
  */
 export function applyVisualEffects(sprite, appearance, effectManager) {
-  if (!PIXI || !sprite || !appearance) {
+  if (!Application || !sprite || !appearance) {
     warn("visualEffectsEngine", "Cannot apply visual effects: invalid input")
     return
   }
@@ -999,16 +999,16 @@ export function applyVisualEffects(sprite, appearance, effectManager) {
   try {
     switch (blendMode.toLowerCase()) {
       case "add":
-        sprite.blendMode = PIXI.BLEND_MODES.ADD
-        break
+        sprite.blendMode = "add";
+        break;
       case "multiply":
-        sprite.blendMode = PIXI.BLEND_MODES.MULTIPLY
-        break
+        sprite.blendMode = "multiply";
+        break;
       case "screen":
-        sprite.blendMode = PIXI.BLEND_MODES.SCREEN
-        break
+        sprite.blendMode = "screen";
+        break;
       default:
-        sprite.blendMode = PIXI.BLEND_MODES.NORMAL
+        sprite.blendMode = "normal";
     }
     debug("visualEffectsEngine", `Applied blend mode ${blendMode}`)
   } catch (e) {
@@ -1040,11 +1040,11 @@ export function applyVisualEffects(sprite, appearance, effectManager) {
 
 /**
  * Update visual effects for all sprites
- * @param {PIXI.Sprite[]} sprites - Array of sprites
+ * @param {Application.Sprite[]} sprites - Array of sprites
  * @param {number} deltaTime - Delta time in milliseconds
  */
 export function updateVisualEffects(sprites, deltaTime) {
-  if (!PIXI) return
+  if (!Application) return
 
   sprites.forEach(sprite => {
     // Update distortion effects via DistortionSystem

@@ -234,7 +234,9 @@ class Player {
       Matter.Body.setAngle(this.physicsEngine.playerBody, (this.rotation * Math.PI) / 180);
     } else {
       this.rotation = 0;
-      Matter.Body.setAngle(this.physicsEngine.playerBody, 0);
+      if (this.physicsEngine && this.physicsEngine.playerBody) {
+        Matter.Body.setAngle(this.physicsEngine.playerBody, 0);
+      }
     }
   }
 
