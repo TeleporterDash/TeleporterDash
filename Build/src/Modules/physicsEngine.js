@@ -2,7 +2,7 @@ import { getTeleportTarget } from "./teleporterEngine.js";
 import { isObjectActive, triggerGroup, handleUnlockOrb } from "./groupManager.js";
 import { timeManager } from "./timeManager.js";
 import Matter from "matter-js";
-
+import { debug, verbose } from "./logManager.js";
 const PHYSICS_CONSTANTS = {
   GRAVITY: 0.0005,
   MAX_FALL_SPEED: 10,
@@ -35,8 +35,13 @@ const CollisionCategories = {
 };
 
 class Player {
-  constructor(x, y, levelHeight, physicsEngine) {
-    this.initialPos = { x: x + 0.5, y: levelHeight * 0.98 - 0.5 };
+  constructor(x, y, levelWidth, levelHeight, physicsEngine) {
+    // Ensure the initial position is within bounds
+    this.initialPos = { 
+      x: Math.max(0.5, Math.min(x + 0.5, levelWidth - 0.5)),
+      y: Math.min(levelHeight - 0.5, y + 0.5)
+    };
+    this.levelWidth = levelWidth;
     this.levelHeight = levelHeight;
     this.physicsEngine = physicsEngine;
     this.lanePositions = [levelHeight / 12, levelHeight / 2, levelHeight - 0.75];
@@ -204,8 +209,10 @@ class PhysicsEngine {
     this.renderEngine = renderEngine;
     this.audioManager = audioManager;
     this.cameraManager = cameraManager;
-    this.player = player || new Player(0, levelMatrix.length - 1, levelMatrix.length, this);
-    this.groundLevel = levelMatrix.length - 0.5;
+    this.levelWidth = levelMatrix[0].length;
+    this.levelHeight = levelMatrix.length;
+    this.player = player || new Player(0, this.levelHeight - 1, this.levelWidth, this.levelHeight, this);
+    this.groundLevel = this.levelHeight - 0.5;
     this.engine = Matter.Engine.create({ gravity: { y: PHYSICS_CONSTANTS.GRAVITY } });
     this.playerBody = Matter.Bodies.rectangle(
       this.player.initialPos.x,
@@ -287,7 +294,8 @@ class PhysicsEngine {
   update() {
     if (this.isPaused || !this.playerBody) return;
     const currentTime = Date.now();
-    const deltaTime = currentTime - this.lastUpdateTime || 16.67;
+    // Clamp deltaTime to prevent large time steps
+    const deltaTime = Math.min(currentTime - this.lastUpdateTime || 16.67, 16.67);
     this.lastUpdateTime = currentTime;
 
     if (this.isDead) {
@@ -298,11 +306,12 @@ class PhysicsEngine {
     this.processInputs(currentTime);
     Matter.Engine.update(this.engine, deltaTime);
 
-    // Validate and clamp player position
+    // Basic validation of player position and velocity
     const pos = this.playerBody.position;
-    const levelWidth = this.levelMatrix[0].length;
-    if (!isFinite(pos.x) || !isFinite(pos.y) || Math.abs(pos.x) > levelWidth * 2 || Math.abs(pos.y) > this.groundLevel * 2) {
-      console.warn("PhysicsEngine: Invalid player position detected, resetting to initial position");
+    const vel = this.playerBody.velocity;
+    
+    if (!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(vel.x) || !isFinite(vel.y)) {
+      debug("physicsEngine", "Invalid player position or velocity detected (NaN or Infinity):", { pos, vel });
       Matter.Body.setPosition(this.playerBody, this.player.initialPos);
       Matter.Body.setVelocity(this.playerBody, { x: 0, y: 0 });
       this.player.isOnPlatform = true;
@@ -310,9 +319,41 @@ class PhysicsEngine {
       this.player.jumpsRemaining = 2;
       this.player.doubleJumpAvailable = true;
       this.player.lastGroundedTime = currentTime;
-    } else if (this.player.mode === "classic" && pos.y > this.groundLevel) {
-      Matter.Body.setPosition(this.playerBody, { x: pos.x, y: this.groundLevel });
-      Matter.Body.setVelocity(this.playerBody, { x: this.playerBody.velocity.x, y: 0 });
+      return;
+    }
+    
+    // Position bounds check
+    const minX = 0.5;
+    const maxX = this.levelWidth - 0.5;
+    const minY = 0.5;
+    const maxY = this.groundLevel;
+
+    if (pos.x < minX || pos.x > maxX || pos.y < minY || pos.y > maxY) {
+      debug("physicsEngine", `Player out of bounds at {x: ${pos.x}, y: ${pos.y}}, bounds are ${minX}-${maxX} x ${minY}-${maxY}`);
+      
+      // Clamp position
+      const clampedPos = {
+        x: Math.max(minX, Math.min(pos.x, maxX)),
+        y: Math.max(minY, Math.min(pos.y, maxY))
+      };
+
+      // Stop movement if hitting boundaries
+      const newVel = {
+        x: (pos.x < minX || pos.x > maxX) ? 0 : vel.x,
+        y: (pos.y < minY || pos.y > maxY) ? 0 : vel.y
+      };
+
+      Matter.Body.setPosition(this.playerBody, clampedPos);
+      Matter.Body.setVelocity(this.playerBody, newVel);
+
+      // Reset player state when hitting ground
+      if (pos.y >= maxY) {
+        this.player.isOnPlatform = true;
+        this.player.isJumping = false;
+        this.player.jumpsRemaining = 2;
+        this.player.doubleJumpAvailable = true;
+        this.player.lastGroundedTime = currentTime;
+      }
     }
 
     this.applyPhysicsConstraints();
@@ -328,6 +369,8 @@ class PhysicsEngine {
   }
 
   processInputs(currentTime) {
+    if (!this.playerBody || this.isDead || this.isComplete) return;
+
     if (this.keys["Space"] || this.keys["ArrowUp"] || this.keys["w"]) {
       if (
         this.player.canJump(currentTime) &&
@@ -345,30 +388,99 @@ class PhysicsEngine {
       }
       this.player.toggleFreeMove(this.keys["Space"]);
     }
-    if (!this.isDead && !this.isComplete) {
+    if (!this.isDead && !this.isComplete && this.playerBody) {
+      // Set horizontal velocity
+      const targetVelocityX = PHYSICS_CONSTANTS.MOVE_SPEED * this.player.facing;
       Matter.Body.setVelocity(this.playerBody, {
-        x: PHYSICS_CONSTANTS.MOVE_SPEED * this.player.facing,
+        x: targetVelocityX,
         y: this.playerBody.velocity.y,
       });
+      
+      // Ensure position is within bounds
+      const pos = this.playerBody.position;
+      if (pos.x < 0.5 || pos.x > this.levelWidth - 0.5) {
+        Matter.Body.setPosition(this.playerBody, {
+          x: Math.max(0.5, Math.min(pos.x, this.levelWidth - 0.5)),
+          y: pos.y
+        });
+        Matter.Body.setVelocity(this.playerBody, { x: 0, y: this.playerBody.velocity.y });
+      }
     }
   }
 
   applyPhysicsConstraints() {
+    const body = this.playerBody;
+    if (!body) return;
+
+    // Get current position and velocity
+    const pos = body.position;
+    const vel = body.velocity;
+
+    // Handle invalid positions first
+    if (!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(vel.x) || !isFinite(vel.y)) {
+      debug("physicsEngine", "Invalid position or velocity detected, resetting player");
+      Matter.Body.setPosition(body, this.player.initialPos);
+      Matter.Body.setVelocity(body, { x: 0, y: 0 });
+      return;
+    }
+
+    // Determine if player is out of bounds
+    const isOutOfBoundsX = pos.x < 0.5 || pos.x > this.levelWidth - 0.5;
+    const isOutOfBoundsY = pos.y < 0.5 || pos.y > this.groundLevel;
+    
+    if (isOutOfBoundsX || isOutOfBoundsY) {
+      // Clamp position
+      const clampedPos = {
+        x: Math.max(0.5, Math.min(pos.x, this.levelWidth - 0.5)),
+        y: Math.max(0.5, Math.min(pos.y, this.groundLevel))
+      };
+      
+      // Clamp velocity - stop movement in the direction of the boundary
+      const clampedVel = {
+        x: isOutOfBoundsX ? 0 : vel.x,
+        y: isOutOfBoundsY ? 0 : vel.y
+      };
+
+      // Apply position and velocity constraints
+      Matter.Body.setPosition(body, clampedPos);
+      Matter.Body.setVelocity(body, clampedVel);
+
+      // Reset player state if hitting ground
+      if (pos.y >= this.groundLevel) {
+        this.player.isOnPlatform = true;
+        this.player.isJumping = false;
+        this.player.jumpsRemaining = 2;
+        this.player.doubleJumpAvailable = true;
+        this.player.lastGroundedTime = Date.now();
+      }
+      return;
+    }
+
+    // Apply general velocity constraints
+    const maxVelocity = PHYSICS_CONSTANTS.MOVE_SPEED * 2;
+    const clampedVel = {
+      x: Math.max(-maxVelocity, Math.min(vel.x, maxVelocity)),
+      y: Math.max(-maxVelocity, Math.min(vel.y, PHYSICS_CONSTANTS.MAX_FALL_SPEED))
+    };
+    
+    if (clampedVel.x !== vel.x || clampedVel.y !== vel.y) {
+      Matter.Body.setVelocity(body, clampedVel);
+    }
+
     if (this.player.mode === "clipper" && this.player.isFreeMoving) {
-      const body = this.playerBody;
       const velocityY = this.player.lane === 0
         ? Math.max(-PHYSICS_CONSTANTS.MOVE_SPEED * 2, body.velocity.y)
         : Math.min(PHYSICS_CONSTANTS.MOVE_SPEED * 2, body.velocity.y);
-      Matter.Body.setVelocity(body, { x: body.velocity.x, y: velocityY });
-      Matter.Body.setPosition(body, {
-        x: body.position.x,
-        y: this.player.lane === 0 ? Math.max(0, body.position.y) : Math.min(this.groundLevel, body.position.y),
+      Matter.Body.setVelocity(body, { 
+        x: Math.min(PHYSICS_CONSTANTS.MOVE_SPEED, body.velocity.x),
+        y: velocityY 
       });
     }
+
     if (this.player.mode === "classic") {
-      Matter.Body.setVelocity(this.playerBody, {
-        x: this.playerBody.velocity.x,
-        y: Math.min(this.playerBody.velocity.y, PHYSICS_CONSTANTS.MAX_FALL_SPEED),
+      Matter.Body.setVelocity(body, {
+        x: Math.min(PHYSICS_CONSTANTS.MOVE_SPEED, body.velocity.x),
+        y: Math.min(body.velocity.y, PHYSICS_CONSTANTS.MAX_FALL_SPEED),
       });
     }
   }

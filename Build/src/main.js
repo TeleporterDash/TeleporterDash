@@ -70,7 +70,7 @@ async function initPixi() {
     
     // Load sprite assets if not already loaded
     if (!spriteMap) {
-        spriteMap = await loadSprites('/assets/Sprites');
+        spriteMap = await loadSprites('assets/Sprites');
     }
 
     if (spriteMap.has('floor')) {
@@ -211,7 +211,11 @@ async function initializeGameFromMatrix() {
         }
     }
     if (!player) {
-        player = new Player(0, 3, parsedMatrix.length, physicsEngine);
+        // Start the player at the bottom left of the level
+        const startX = 1; // One block in from the left
+        const startY = parsedMatrix.length - 2; // Two blocks up from the bottom
+        debug('gameTest', `Creating player at (${startX}, ${startY}) in level ${parsedMatrix[0].length}x${parsedMatrix.length}`);
+        player = new Player(startX, startY, parsedMatrix[0].length, parsedMatrix.length, physicsEngine);
         player.renderEngine = renderEngine;
     }
     

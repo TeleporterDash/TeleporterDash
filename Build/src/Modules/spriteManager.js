@@ -340,9 +340,13 @@ export async function getSprite(type, spriteMap, colorData = {}) {
 }
 
 export async function getPlayerSprite(spriteMap, color = "#ffffff") {
+  debug("spriteManager", "Starting getPlayerSprite...");
   const spriteData = spriteMap.get("player")
-  if (!spriteData) return null
-
+  if (!spriteData) {
+    error("spriteManager", "No player sprite data found in spriteMap!");
+    return null;
+  }
+  debug("spriteManager", "Found player sprite data in spriteMap");
   const { assetId, svg } = spriteData
   let texture
 
@@ -355,11 +359,13 @@ export async function getPlayerSprite(spriteMap, color = "#ffffff") {
       await Assets.load({ alias: coloredAssetId, src: coloredDataUrl })
     }
 
+    debug("spriteManager", "Loading colored asset...");
     texture = Assets.get(coloredAssetId)
     if (!texture) {
       error("spriteManager", `Colored asset ${coloredAssetId} not found in PixiJS Assets cache`)
       return null
     }
+    debug("spriteManager", "Successfully got texture from Assets");
   } catch (err) {
     error("spriteManager", "Failed to load player texture:", err)
     return null

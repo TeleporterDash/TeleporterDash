@@ -327,18 +327,27 @@ export class RenderEngine {
    * @param {Object} player - Player instance
    */
   async renderPlayer(player) {
+    debug("renderEngine", "Starting renderPlayer...");
     if (this.playerSprite) {
+      debug("renderEngine", "Cleaning up existing player sprite...");
       if (this.playerSprite.parent) {
         this.container.removeChild(this.playerSprite);
       }
       this.playerSprite.destroy();
       this.playerSprite = null;
     }
+    debug("renderEngine", "Getting player sprite from spriteMap...");
     this.playerSprite = await getPlayerSprite(this.spriteMap);
+    if (!this.playerSprite) {
+      error("renderEngine", "Failed to get player sprite!");
+      return;
+    }
+    debug("renderEngine", "Setting player sprite properties...");
     this.playerSprite.zIndex = 10000;
     const spriteSize = 30;
     this.playerSprite.scale.set(this.blockSize / spriteSize);
     this.setSpriteTransform(this.playerSprite, player, { xOffset: 0.5, yOffset: 0.75 });
+    debug("renderEngine", "Adding player sprite to container...");
     this.container.addChild(this.playerSprite);
     debug("renderEngine", "Player sprite rendered successfully");
     verbose("renderEngine", `Player sprite updated at [${player.x},${player.y}] with scale ${this.playerSprite.scale.x}, rotation ${player.rotation}`);
@@ -411,7 +420,7 @@ export class RenderEngine {
   updatePlayerPosition(player, rotation) {
     if (!this.playerSprite) return;
     this.setSpriteTransform(this.playerSprite, { ...player, rotation }, { xOffset: 0.5, yOffset: 0.75 });
-    debug("renderEngine", `Player position updated: x=${player.x}, y=${player.y}, visualY=${player.y + 0.75}, rotation=${rotation || player.rotation || 0}`);
+    verbose("renderEngine", `Player position updated: x=${player.x}, y=${player.y}, visualY=${player.y + 0.75}, rotation=${rotation || player.rotation || 0}`);
   }
 
   /**
