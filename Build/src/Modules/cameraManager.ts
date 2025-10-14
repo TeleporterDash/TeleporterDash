@@ -1,5 +1,5 @@
 // Modules/cameraManager.js
-import { warn, debug, verbose, setLogLevel } from "./logManager.js"
+import { warn, debug, verbose, setLogLevel } from "./logManager"
 import { gsap } from "gsap"
 import _ from "lodash"
 

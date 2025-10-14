@@ -31,6 +31,7 @@
   "homepage": "https://github.com/TeleporterDash/TeleporterDash#readme",
   "dependencies": {
     "@pixi/filter-displacement": "^7.4.3",
+    "@types/lodash": "^4.17.20",
     "color": "^5.0.0",
     "contro": "^2.2.0",
     "gsap": "^3.13.0",

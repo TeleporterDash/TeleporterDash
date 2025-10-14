@@ -1,4 +1,4 @@
-import { warn, error, debug, verbose } from "./logManager.js"
+import { warn, error, debug, verbose } from "./logManager"
 import { gsap } from "gsap"
 import { PixiPlugin } from "gsap/PixiPlugin"
 import { clamp, random, sample } from "lodash"

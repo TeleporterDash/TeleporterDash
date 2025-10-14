@@ -1,13 +1,19 @@
-import { log, warn, error, debug, setLogLevel } from "./logManager.js";
-import { getSprite } from "./spriteManager.js";
-import AudioManager from "./audioManager.js";
-import { PopupManager } from "./popupManager.js";
-import { currencyManager } from "./currencyManager.js"; // Import singleton
-import ACHIEVEMENTS from '../JSON/achievements.json';
-import '../CSS/achievementManager.css';
+import { log, warn, error, debug, setLogLevel } from "./logManager"
+import { getSprite } from "./spriteManager"
+import AudioManager from "./audioManager"
+import { PopupManager } from "./popupManager"
+import { currencyManager } from "./currencyManager" // Import singleton
+import ACHIEVEMENTS from '../JSON/achievements.json'
+import '../CSS/achievementManager.css'
 
 const STORAGE_KEY = "achievements";
 const LOG_CONTEXT = "achievementManager";
+
+export interface AchievementManager {
+  achievements: {};
+  totalPoints: number;
+  unlockedAchievements: {};
+}
 
 export class AchievementManager {
   constructor(options = {}) {

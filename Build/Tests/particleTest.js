@@ -1,5 +1,5 @@
 // particleTest.js - Test matrix for particle effects
-import { debug, error } from "./logManager.js"
+import { debug, error } from "./logManager
 
 /**
  * Generate a test matrix specifically for testing particle effects

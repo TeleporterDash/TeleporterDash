@@ -6,9 +6,21 @@
  */
 
 import { Howl, Howler } from 'howler';
-import { warn, error, debug, verbose } from "./logManager.js"
+import { warn, error, debug, verbose } from "./logManager"
 
-export default class AudioManager {
+interface AudioManager {
+  backgroundMusic: null;
+  practiceMusic: null;
+  jumpSound: null;
+  deathSound: null;
+  completionSound: null;
+  achievementSound: null;
+  isMuted: boolean;
+  isInitialized: boolean;
+  
+}
+
+class AudioManager {
   constructor() {
     this.backgroundMusic = null
     this.practiceMusic = null
@@ -554,3 +566,5 @@ export default class AudioManager {
     debug("audioManager", "AudioManager cleanup complete")
   }
 }
+
+export default AudioManager;

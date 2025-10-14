@@ -1,7 +1,7 @@
 // Modules/animationEngine.js
-import { colorizeSVG } from "./spriteManager.js"
-import { blendColors, hslToHex } from "./colorUtils.js"
-import { warn, verbose, setLogLevel } from "./logManager.js"
+import { colorizeSVG } from "./spriteManager"
+import { blendColors, hslToHex } from "./colorUtils"
+import { warn, verbose, setLogLevel } from "./logManager"
 import _ from "lodash"
 
 setLogLevel("debug")

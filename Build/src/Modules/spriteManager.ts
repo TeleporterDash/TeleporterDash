@@ -1,6 +1,6 @@
 // Modules/spriteManager.js
-import { hexToHSL, hslToHex, blendColors } from "./colorUtils.js"
-import { warn, error, debug, verbose, log } from "./logManager.js"
+import { hexToHSL, hslToHex, blendColors } from "./colorUtils"
+import { warn, error, debug, verbose, log } from "./logManager"
 import { Sprite, Assets } from 'pixi.js';
 
 const COLOR_MAP = {

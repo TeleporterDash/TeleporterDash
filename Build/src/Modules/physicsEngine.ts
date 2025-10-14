@@ -1,8 +1,9 @@
-import { getTeleportTarget } from "./teleporterEngine.js";
-import { isObjectActive, triggerGroup, handleUnlockOrb } from "./groupManager.js";
-import { timeManager } from "./timeManager.js";
+import { getTeleportTarget } from "./teleporterEngine"
+import { isObjectActive, triggerGroup, handleUnlockOrb } from "./groupManager"
+import { timeManager } from "./timeManager"
 import Matter from "matter-js";
-import { debug, verbose } from "./logManager.js";
+import { debug, verbose } from "./logManager"
+
 const PHYSICS_CONSTANTS = {
   GRAVITY: 0.0005,
   MAX_FALL_SPEED: 10,

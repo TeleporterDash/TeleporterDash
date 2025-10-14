@@ -1,12 +1,12 @@
-import { applyVisualEffects, updateVisualEffects, EffectManager } from "./visualEffectsEngine.js";
-import { getLayerOrder } from "./layerManager.js";
-import { getSprite, getPlayerSprite, getFloorSprite } from "./spriteManager.js";
-import { isObjectActive } from "./groupManager.js";
-import { updateAnimations, pregenerateTextures, clearTextureCache, getTextureCache } from "./animationEngine.js";
-import { hexToNumber } from "./colorUtils.js";
-import { warn, error, debug, verbose, setLogLevel } from "./logManager.js";
-import { map, flatMap, filter } from "lodash";
-import { Container, Graphics, Text, Assets } from "pixi.js";
+import { applyVisualEffects, updateVisualEffects, EffectManager } from "./visualEffectsEngine"
+import { getLayerOrder } from "./layerManager"
+import { getSprite, getPlayerSprite, getFloorSprite } from "./spriteManager"
+import { isObjectActive } from "./groupManager"
+import { updateAnimations, pregenerateTextures, clearTextureCache, getTextureCache } from "./animationEngine"
+import { hexToNumber } from "./colorUtils"
+import { warn, error, debug, verbose, setLogLevel } from "./logManager"
+import { map, flatMap, filter } from "lodash"
+import { Container, Graphics, Text, Assets } from "pixi.js"
 
 
 setLogLevel("debug");

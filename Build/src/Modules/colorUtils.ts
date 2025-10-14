@@ -1,6 +1,5 @@
 import Color from 'color';
 
-// lol it tinyyyyyyyyyy
 export const hexToRGB = (hex) => Color(hex).rgb().object();
 export const rgbToHex = (r, g, b) => Color.rgb(r, g, b).hex();
 export const hexToHSL = (hex) => Color(hex).hsl().array();

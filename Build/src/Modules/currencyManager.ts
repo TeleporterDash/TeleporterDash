@@ -1,5 +1,5 @@
-import { debug, setLogLevel } from "./logManager.js"
-import { StorageManager } from "./storageManager.js"
+import { debug, setLogLevel } from "./logManager"
+import { StorageManager } from "./storageManager"
 setLogLevel("debug")
 
 class CurrencyManager {

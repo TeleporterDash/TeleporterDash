@@ -1,4 +1,4 @@
-import { debug } from "./logManager.js"
+import { debug } from "./logManager"
 import gsap from "gsap"
 
 export class MusicSync {
