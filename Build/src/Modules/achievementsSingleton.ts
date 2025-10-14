@@ -1,5 +1,5 @@
 import { AchievementManager } from "./achievementManager.js";
-import { StorageManager } from "./storageManager.js";
+import { storageManager } from "./storageManager.js";
 import { PopupManager } from "./popupManager.js";
 import AudioManager from "./audioManager.js";
 
@@ -7,7 +7,7 @@ import AudioManager from "./audioManager.js";
 const achievementManager = new AchievementManager({
   audioManager: new AudioManager(),
   popupManager: new PopupManager(),
-  storageManager: new StorageManager(),
+  storageManager: storageManager,
   debugMode: true,
 });
 

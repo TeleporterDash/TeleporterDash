@@ -20,16 +20,21 @@ const scoresDB = localforage.createInstance({
   description: 'Level scores storage'
 })
 
-export const StorageManager = {
+class StorageManager {
   // GitHub API constants
-  GITHUB_API_BASE: 'https://api.github.com/repos/NellowTCS/TeleporterDashLevels/contents',
-  GITHUB_RAW_BASE: 'https://raw.githubusercontent.com/NellowTCS/TeleporterDashLevels/main',
+  GITHUB_API_BASE: string = 'https://api.github.com/repos/NellowTCS/TeleporterDashLevels/contents';
+  GITHUB_RAW_BASE: string = 'https://raw.githubusercontent.com/NellowTCS/TeleporterDashLevels/main';
   
   // Storage keys
-  SETTINGS_KEY: 'gameSettings',
-  LEVELS_REGISTRY_KEY: 'userLevelsRegistry',
-  NEXT_LEVEL_ID_KEY: 'nextLevelId',
-  TEST_LEVEL_KEY: 'testLevel',
+  SETTINGS_KEY: string = 'gameSettings';
+  LEVELS_REGISTRY_KEY: string = 'userLevelsRegistry';
+  NEXT_LEVEL_ID_KEY: string = 'nextLevelId';
+  TEST_LEVEL_KEY: string = 'testLevel';
+
+  constructor() {
+    // Initialize (localforage handles this automatically, but keeping for compatibility)
+    this.initialize();
+  }
 
   // Initialize (localforage handles this automatically, but keeping for compatibility)
   async initialize(options = {}) {
@@ -40,7 +45,7 @@ export const StorageManager = {
       error('storageManager', 'Error initializing storage:', err)
       throw err
     }
-  },
+  };
 
   // Generic storage methods
   async saveToStore(storeName, key, data) {
@@ -54,7 +59,7 @@ export const StorageManager = {
       error('storageManager', `Error saving to ${storeName}:`, err)
       throw err
     }
-  },
+  };
 
   async getFromStore(storeName, key) {
     try {
@@ -71,7 +76,7 @@ export const StorageManager = {
       error('storageManager', `Error getting from ${storeName}:`, err)
       throw err
     }
-  },
+  };
 
   async deleteFromStore(storeName, key) {
     try {
@@ -84,7 +89,7 @@ export const StorageManager = {
       error('storageManager', `Error deleting from ${storeName}:`, err)
       throw err
     }
-  },
+  };
 
   async getAllFromStore(storeName) {
     try {
@@ -103,7 +108,7 @@ export const StorageManager = {
       error('storageManager', `Error getting all from ${storeName}:`, err)
       throw err
     }
-  },
+  };
 
   async clearStore(storeName) {
     try {
@@ -116,7 +121,7 @@ export const StorageManager = {
       error('storageManager', `Error clearing ${storeName}:`, err)
       throw err
     }
-  },
+  };
 
   // Helper to get the right database instance
   getDB(storeName) {
@@ -129,7 +134,7 @@ export const StorageManager = {
       default:
         return gameDB
     }
-  },
+  };
 
   // LocalStorage methods (keeping for compatibility)
   saveToLocalStorage(key, data) {
@@ -142,7 +147,7 @@ export const StorageManager = {
       error('storageManager', `Error saving to localStorage with key ${key}:`, err)
       throw err
     }
-  },
+  };
 
   getFromLocalStorage(key, defaultValue = null) {
     try {
@@ -159,7 +164,7 @@ export const StorageManager = {
       error('storageManager', `Error getting from localStorage with key ${key}:`, err)
       return defaultValue
     }
-  },
+  };
 
   removeFromLocalStorage(key) {
     try {
@@ -171,33 +176,33 @@ export const StorageManager = {
       error('storageManager', `Error removing from localStorage with key ${key}:`, err)
       throw err
     }
-  },
+  };
 
   hasLocalStorageKey(key) {
     return localStorage.getItem(key) !== null
-  },
+  };
 
   // Level management
   async saveLevel(levelData) {
     return this.saveToStore('game', levelData.id, levelData)
-  },
+  };
 
   async getLevel(levelId) {
     return this.getFromStore('game', levelId)
-  },
+  };
 
   async deleteLevel(levelId) {
     return this.deleteFromStore('game', levelId)
-  },
+  };
 
   async getDownloadedLevels() {
     return this.getAllFromStore('game')
-  },
+  };
 
   async isLevelDownloaded(levelId) {
     const level = await this.getFromStore('game', levelId)
     return level !== null
-  },
+  };
 
   async downloadLevel(filename) {
     try {
@@ -226,11 +231,11 @@ export const StorageManager = {
       error('storageManager', `Error downloading level ${filename}:`, err)
       throw err
     }
-  },
+  };
 
   async deleteDownloadedLevel(filename) {
     return this.deleteFromStore('game', filename)
-  },
+  };
 
   // Score management
   async saveScore(filename, time, jumps, deaths) {
@@ -248,11 +253,11 @@ export const StorageManager = {
       error('storageManager', 'Error in saveScore:', err)
       throw err
     }
-  },
+  };
 
   async getAllScores() {
     return this.getAllFromStore('scores')
-  },
+  };
 
   // Test level management
   async saveTestLevel(levelData) {
@@ -269,7 +274,7 @@ export const StorageManager = {
       error('storageManager', 'Error in saveTestLevel:', err)
       throw err
     }
-  },
+  };
 
   async getTestLevel() {
     try {
@@ -279,7 +284,7 @@ export const StorageManager = {
       error('storageManager', 'Error in getTestLevel:', err)
       throw err
     }
-  },
+  };
 
   // Clear all data
   async clearAllData() {
@@ -301,3 +306,5 @@ export const StorageManager = {
     }
   }
 }
+
+export const storageManager = new StorageManager();

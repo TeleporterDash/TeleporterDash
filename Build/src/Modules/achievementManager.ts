@@ -13,6 +13,20 @@ export interface AchievementManager {
   achievements: {};
   totalPoints: number;
   unlockedAchievements: {};
+  audioManager: AudioManager;
+  popupManager: PopupManager;
+  storageManager: StorageManager;
+  debugMode: boolean;
+  init(): Promise<void>;
+  loadAchievements(): Promise<void>;
+  saveAchievements(): Promise<void>;
+  resetAchievements(): void;
+  unlockAchievement(achievementId: string): boolean;
+  getUnlockedAchievements(): {};
+  getAchievement(achievementId: string): {};
+  updateProgress(achievementId: string, progress?: number): boolean;
+  isUnlocked(achievementId: string): boolean;
+  createAchievementElement(achievementId: string): HTMLElement;
 }
 
 export class AchievementManager {
