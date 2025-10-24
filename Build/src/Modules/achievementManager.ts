@@ -33,10 +33,11 @@ export class AchievementManager {
   constructor(options = {}) {
     this.achievements = {};
     this.totalPoints = 0;
+    this.debugMode = false;
     this.unlockedAchievements = new Set();
-    this.audioManager = options.audioManager || new AudioManager();
-    this.popupManager = options.popupManager || new PopupManager();
-    this.storageManager = options.storageManager;
+    this.audioManager = this.audioManager;
+    this.popupManager = this.popupManager;
+    this.storageManager = this.storageManager;
 
     if (options.debugMode) {
       setLogLevel("debug");

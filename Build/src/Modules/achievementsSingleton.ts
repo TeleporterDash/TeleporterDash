@@ -12,7 +12,7 @@ const achievementManager = new AchievementManager({
 });
 
 export const AchievementsManager = {
-  async checkAchievements(filename, runData) {
+  async checkAchievements(filename: string, runData: { time: number; deaths: number; jumps: number; }) {
     // Example achievement checks based on run data
     if (filename === "level1" && runData.time < 30) {
       achievementManager.updateProgress("speedster", 1);
@@ -28,13 +28,13 @@ export const AchievementsManager = {
 
   // Expose AchievementManager instance methods if needed
   init: () => achievementManager.init(),
-  updateProgress: (id, progress) =>
+  updateProgress: (id: any, progress: number | undefined) =>
     achievementManager.updateProgress(id, progress),
-  unlockAchievement: (id) => achievementManager.unlockAchievement(id),
-  getAchievementProgress: (id) => achievementManager.getAchievementProgress(id),
-  isUnlocked: (id) => achievementManager.isUnlocked(id),
+  unlockAchievement: (id: any) => achievementManager.unlockAchievement(id),
+  getAchievementProgress: (id: any) => achievementManager.getAchievementProgress(id),
+  isUnlocked: (id: any) => achievementManager.isUnlocked(id),
   getTotalPoints: () => achievementManager.getTotalPoints(),
   getUnlockedAchievements: () => achievementManager.getUnlockedAchievements(),
   getAllAchievements: () => achievementManager.getAllAchievements(),
-  getAchievement: (id) => achievementManager.getAchievement(id),
+  getAchievement: (id: any) => achievementManager.getAchievement(id),
 };

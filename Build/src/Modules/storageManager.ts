@@ -9,7 +9,7 @@ const gameDB = localforage.createInstance({
 })
 
 const editorDB = localforage.createInstance({
-  name: 'LevelEditorDB', 
+  name: 'LevelEditorDB',
   storeName: 'editorData',
   description: 'Level editor data storage'
 })
@@ -24,7 +24,7 @@ class StorageManager {
   // GitHub API constants
   GITHUB_API_BASE: string = 'https://api.github.com/repos/NellowTCS/TeleporterDashLevels/contents';
   GITHUB_RAW_BASE: string = 'https://raw.githubusercontent.com/NellowTCS/TeleporterDashLevels/main';
-  
+
   // Storage keys
   SETTINGS_KEY: string = 'gameSettings';
   LEVELS_REGISTRY_KEY: string = 'userLevelsRegistry';
@@ -48,7 +48,7 @@ class StorageManager {
   };
 
   // Generic storage methods
-  async saveToStore(storeName, key, data) {
+  async saveToStore(storeName: string, key: string, data: { levelId: any; time: any; jumps: any; deaths: any; timestamp: number }) {
     try {
       debug('storageManager', `Saving data to ${storeName} with key ${key}`)
       const db = this.getDB(storeName)
@@ -61,7 +61,7 @@ class StorageManager {
     }
   };
 
-  async getFromStore(storeName, key) {
+  async getFromStore(storeName: string, key: string) {
     try {
       verbose('storageManager', `Getting data from ${storeName} with key ${key}`)
       const db = this.getDB(storeName)
@@ -78,7 +78,7 @@ class StorageManager {
     }
   };
 
-  async deleteFromStore(storeName, key) {
+  async deleteFromStore(storeName: string, key: string) {
     try {
       debug('storageManager', `Deleting data from ${storeName} with key ${key}`)
       const db = this.getDB(storeName)
@@ -91,17 +91,18 @@ class StorageManager {
     }
   };
 
-  async getAllFromStore(storeName) {
+  async getAllFromStore(storeName: string) {
     try {
       debug('storageManager', `Getting all data from ${storeName}`)
       const db = this.getDB(storeName)
       const keys = await db.keys()
-      const items = {}
-      
+      const items: { [key: string]: IDBDatabase | null } = {};
+
       for (const key of keys) {
-        items[key] = await db.getItem(key)
+        if (key === null) warn('storageManager', `Null key, ${key}, found in ${storeName}.`);
+        items[key] = await db.getItem(key);
       }
-      
+
       debug('storageManager', `All data retrieved successfully from ${storeName}`)
       return Object.values(items)
     } catch (err) {
@@ -110,7 +111,7 @@ class StorageManager {
     }
   };
 
-  async clearStore(storeName) {
+  async clearStore(storeName: string) {
     try {
       debug('storageManager', `Clearing all data from ${storeName}`)
       const db = this.getDB(storeName)
@@ -124,7 +125,7 @@ class StorageManager {
   };
 
   // Helper to get the right database instance
-  getDB(storeName) {
+  getDB(storeName: any) {
     switch (storeName) {
       case 'scores':
         return scoresDB
@@ -137,7 +138,7 @@ class StorageManager {
   };
 
   // LocalStorage methods (keeping for compatibility)
-  saveToLocalStorage(key, data) {
+  saveToLocalStorage(key: string, data: any) {
     try {
       debug('storageManager', `Saving data to localStorage with key ${key}`)
       localStorage.setItem(key, JSON.stringify(data))
@@ -149,7 +150,7 @@ class StorageManager {
     }
   };
 
-  getFromLocalStorage(key, defaultValue = null) {
+  getFromLocalStorage(key: string, defaultValue = null) {
     try {
       debug('storageManager', `Getting data from localStorage with key ${key}`)
       const data = localStorage.getItem(key)
@@ -166,7 +167,7 @@ class StorageManager {
     }
   };
 
-  removeFromLocalStorage(key) {
+  removeFromLocalStorage(key: string) {
     try {
       debug('storageManager', `Removing data from localStorage with key ${key}`)
       localStorage.removeItem(key)
@@ -178,20 +179,26 @@ class StorageManager {
     }
   };
 
-  hasLocalStorageKey(key) {
+  hasLocalStorageKey(key: string) {
     return localStorage.getItem(key) !== null
   };
 
   // Level management
-  async saveLevel(levelData) {
-    return this.saveToStore('game', levelData.id, levelData)
+  async saveLevel(levelData: {
+    levelId: any;
+    time: any;
+    jumps: any;
+    deaths: any;
+    timestamp: number;
+  }) {
+    return this.saveToStore('game', levelData.levelId, levelData);
   };
 
-  async getLevel(levelId) {
+  async getLevel(levelId: any) {
     return this.getFromStore('game', levelId)
   };
 
-  async deleteLevel(levelId) {
+  async deleteLevel(levelId: any) {
     return this.deleteFromStore('game', levelId)
   };
 
@@ -199,31 +206,31 @@ class StorageManager {
     return this.getAllFromStore('game')
   };
 
-  async isLevelDownloaded(levelId) {
+  async isLevelDownloaded(levelId: any) {
     const level = await this.getFromStore('game', levelId)
     return level !== null
   };
 
-  async downloadLevel(filename) {
+  async downloadLevel(filename: any) {
     try {
       debug('storageManager', `Downloading level ${filename}`)
       const response = await fetch(`${this.GITHUB_RAW_BASE}/${filename}`)
       const levelCode = await response.text()
-      
+
       // Execute level code to get levelData
       const levelData = new Function(`
         window = {};
         ${levelCode}
         return window.levelData;
       `)()
-      
+
       const levelConfig = {
         ...levelData,
         filename,
         dateDownloaded: new Date().toISOString(),
         originalCode: levelCode
       }
-      
+
       await this.saveToStore('game', filename, levelConfig)
       debug('storageManager', `Level ${filename} downloaded successfully`)
       return levelConfig
@@ -233,12 +240,12 @@ class StorageManager {
     }
   };
 
-  async deleteDownloadedLevel(filename) {
+  async deleteDownloadedLevel(filename: any) {
     return this.deleteFromStore('game', filename)
   };
 
   // Score management
-  async saveScore(filename, time, jumps, deaths) {
+  async saveScore(filename: any, time: any, jumps: any, deaths: any) {
     try {
       debug('storageManager', `Saving score for level ${filename}`)
       const score = {
@@ -260,7 +267,7 @@ class StorageManager {
   };
 
   // Test level management
-  async saveTestLevel(levelData) {
+  async saveTestLevel(levelData: any) {
     try {
       debug('storageManager', 'Saving test level')
       const testLevelData = {
@@ -290,13 +297,13 @@ class StorageManager {
   async clearAllData() {
     try {
       debug('storageManager', 'Clearing all stored data')
-      
+
       await Promise.all([
         this.clearStore('game'),
         this.clearStore('scores'),
         this.clearStore('editor')
       ])
-      
+
       localStorage.clear()
       debug('storageManager', 'All stored data cleared successfully')
       return true

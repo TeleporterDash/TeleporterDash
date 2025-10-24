@@ -21,6 +21,13 @@ interface AudioManager {
 }
 
 class AudioManager {
+  isMusicPlaying: boolean;
+  restartMusicOnDeath: boolean;
+  restartMusicOnCompletion: boolean;
+  backgroundMusicTime: number;
+  practiceMusicTime: number;
+  lastMusicTime: number;
+  volumes: { backgroundMusic: number; practiceMusic: number; jumpSound: number; deathSound: number; completionSound: number; achievementSound: number; };
   constructor() {
     this.backgroundMusic = null
     this.practiceMusic = null
@@ -73,13 +80,14 @@ class AudioManager {
         loop: true,
         volume: this.volumes.backgroundMusic,
         onload: () => debug("audioManager", "Background music loaded"),
-        onloaderror: (id, err) => error("audioManager", "Background music load error:", err),
+        onloaderror: (id: any, err: any) => error("audioManager", "Background music load error:", err),
         onplay: () => {
           this.isMusicPlaying = true
           debug("audioManager", "Background music started playing")
         },
         onpause: () => {
           this.isMusicPlaying = false
+          if (!this || !this.backgroundMusic) return;
           this.backgroundMusicTime = this.backgroundMusic.seek()
           debug("audioManager", "Background music paused")
         },
@@ -102,7 +110,7 @@ class AudioManager {
         loop: true,
         volume: this.volumes.practiceMusic,
         onload: () => debug("audioManager", "Practice music loaded"),
-        onloaderror: (id, err) => error("audioManager", "Practice music load error:", err)
+        onloaderror: (id: any, err: any) => error("audioManager", "Practice music load error:", err)
       })
 
       // Initialize sound effects
@@ -113,7 +121,7 @@ class AudioManager {
         ],
         volume: this.volumes.jumpSound,
         onload: () => debug("audioManager", "Jump sound loaded"),
-        onloaderror: (id, err) => error("audioManager", "Jump sound load error:", err)
+        onloaderror: (id: any, err: any) => error("audioManager", "Jump sound load error:", err)
       })
 
       this.deathSound = new Howl({
@@ -123,7 +131,7 @@ class AudioManager {
         ],
         volume: this.volumes.deathSound,
         onload: () => debug("audioManager", "Death sound loaded"),
-        onloaderror: (id, err) => error("audioManager", "Death sound load error:", err)
+        onloaderror: (id: any, err: any) => error("audioManager", "Death sound load error:", err)
       })
 
       this.completionSound = new Howl({
@@ -133,7 +141,7 @@ class AudioManager {
         ],
         volume: this.volumes.completionSound,
         onload: () => debug("audioManager", "Completion sound loaded"),
-        onloaderror: (id, err) => error("audioManager", "Completion sound load error:", err)
+        onloaderror: (id, err: any) => error("audioManager", "Completion sound load error:", err)
       })
 
       this.achievementSound = new Howl({
@@ -143,7 +151,7 @@ class AudioManager {
         ],
         volume: this.volumes.achievementSound,
         onload: () => debug("audioManager", "Achievement sound loaded"),
-        onloaderror: (id, err) => error("audioManager", "Achievement sound load error:", err)
+        onloaderror: (id, err: any) => error("audioManager", "Achievement sound load error:", err)
       })
 
       this.isInitialized = true
@@ -176,7 +184,7 @@ class AudioManager {
       loop: true,
       volume: this.volumes.backgroundMusic,
       onload: () => debug("audioManager", "New background music loaded"),
-      onloaderror: (id, err) => error("audioManager", "New background music load error:", err),
+      onloaderror: (id: any, err: any) => error("audioManager", "New background music load error:", err),
       onplay: () => {
         this.isMusicPlaying = true
         debug("audioManager", "New background music started playing")
@@ -198,7 +206,7 @@ class AudioManager {
    * @param {string} levelMusicPath - Path to the level's music file
    * @returns {Promise} A promise that resolves when setup is complete
    */
-  async setup(levelMusicPath) {
+  async setup(levelMusicPath: string | undefined) {
     await this.initialize(levelMusicPath)
     
     // Update volumes from settings
@@ -233,7 +241,7 @@ class AudioManager {
    * @param {Howl} sound - The Howl instance to wait for
    * @returns {Promise} A promise that resolves when the sound is loaded
    */
-  waitForSoundLoad(sound) {
+  waitForSoundLoad(sound: { state: () => string; off: (arg0: string, arg1: { (): void; (id: any, err: any): void; (): void; (id: any, err: any): void; }) => void; on: (arg0: string, arg1: { (): void; (id: any, err: any): void; }) => void; } | null) {
     return new Promise((resolve, reject) => {
       if (sound.state() === 'loaded') {
         resolve()
@@ -246,7 +254,7 @@ class AudioManager {
         resolve()
       }
 
-      const onError = (id, err) => {
+      const onError = (id: any, err: any) => {
         sound.off('load', onLoad)
         sound.off('loaderror', onError)
         reject(err)
@@ -326,7 +334,7 @@ class AudioManager {
    * Switch between background and practice music
    * @param {boolean} isPracticeMode - Whether to switch to practice mode
    */
-  switchTracks(isPracticeMode) {
+  switchTracks(isPracticeMode: any) {
     if (isPracticeMode) {
       // Switch to practice music
       if (this.backgroundMusic && this.backgroundMusic.playing()) {
@@ -362,7 +370,7 @@ class AudioManager {
    * @param {number} duration - Duration of the fade in milliseconds
    * @returns {Promise} A promise that resolves when the fade is complete
    */
-  fadeOut(sound, duration = 1000) {
+  fadeOut(sound: never, duration = 1000) {
     return new Promise((resolve) => {
       if (!sound || !sound.playing()) {
         resolve()
