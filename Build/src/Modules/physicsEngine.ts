@@ -90,6 +90,7 @@ type CameraManagerLike = {
 };
 
 class Player {
+  [x: string]: any;
   initialPos: { x: number; y: number };
   levelWidth: number;
   levelHeight: number;

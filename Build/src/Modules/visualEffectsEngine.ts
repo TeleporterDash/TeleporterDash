@@ -29,7 +29,7 @@ gsap.registerPlugin(PixiPlugin)
  * Enhanced particle effect configurations with GSAP easing
  * @type {Object}
  */
-const PARTICLE_CONFIGS = Object.freeze({
+const PARTICLE_CONFIGS: object = Object.freeze({
   sparkle: {
     scale: { start: 0.8, end: 1.2 },
     color: { start: "#ffffff", end: "#000000" },
@@ -81,7 +81,7 @@ const PARTICLE_CONFIGS = Object.freeze({
  * Enhanced distortion effect configurations
  * @type {Object}
  */
-const DISTORTION_CONFIGS = Object.freeze({
+const DISTORTION_CONFIGS: object = Object.freeze({
   wave: {
     amplitude: 30,
     speed: 1000,
@@ -122,9 +122,9 @@ const DISTORTION_CONFIGS = Object.freeze({
 /**
  * Creates an optimized ripple displacement texture using PIXI Graphics
  * @param {number} size - Texture size (default: 256)
- * @returns {Application.Texture} The generated texture
+ * @returns {Texture} The generated texture
  */
-export function createRippleTexture(size = 256) {
+export function createRippleTexture(size: number = 256): Texture {
   if(!Application) return null
 
   try {
@@ -145,7 +145,7 @@ export function createRippleTexture(size = 256) {
     return texture
   } catch (e) {
     error("visualEffectsEngine", "Failed to create ripple texture", e)
-    return null
+    return null;
   }
 }
 
@@ -153,10 +153,10 @@ export function createRippleTexture(size = 256) {
  * Creates a noise displacement texture for displacement effects
  * @param {number} width - Texture width (default: 128)
  * @param {number} height - Texture height (default: 128)
- * @returns {Application.Sprite} The displacement sprite
+ * @returns {Sprite} The displacement sprite
  */
-export function createDisplacementSprite(width = 128, height = 128) {
-  if(!Application) return null
+export function createDisplacementSprite(width: number = 128, height: number = 128): Sprite {
+  if(!Application) return null;
 
   try {
     const canvas = document.createElement("canvas")
@@ -186,7 +186,7 @@ export function createDisplacementSprite(width = 128, height = 128) {
  * @param {number} t - Interpolation factor (0-1)
  * @returns {number} Interpolated color as hex number
  */
-function interpolateColor(startColor, endColor, t) {
+function interpolateColor(startColor: string | number, endColor: string | number, t: number): number {
   try {
     const start = Color(startColor)
     const end = Color(endColor)
@@ -203,7 +203,7 @@ function interpolateColor(startColor, endColor, t) {
  * @param {Array<string>} palette - Array of color strings
  * @returns {string} Random color from palette
  */
-function getRandomColor(palette = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff']) {
+function getRandomColor(palette: Array<string> = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff']): string {
   return sample(palette)
 }
 
@@ -215,14 +215,22 @@ function getRandomColor(palette = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '
  * Advanced distortion effects using pixi-filters and GSAP
  */
 export class DistortionSystem {
+  sprite: Sprite
+  type: string
+  intensity: number
+  options: object
+  filter: null
+  active: boolean
+  timeline: null
+  originalFilters: null
   /**
    * Creates a new distortion effect
-   * @param {Application.Sprite} sprite - Target sprite
+   * @param {Sprite} sprite - Target sprite
    * @param {string} type - Effect type ('wave', 'ripple', 'twist', 'noise', 'displacement')
    * @param {number} intensity - Effect intensity (0-3)
    * @param {Object} options - Additional options
    */
-  constructor(sprite, type, intensity = 1, options = {}) {
+  constructor(sprite: Sprite, type: string, intensity: number = 1, options: object = {}) {
     this.sprite = sprite
     this.type = Object.prototype.hasOwnProperty.call(DISTORTION_CONFIGS, type) ? type : "wave"
     this.intensity = clamp(intensity, 0, 3)
@@ -280,8 +288,10 @@ export class DistortionSystem {
    * @param {number} centerX - Center X coordinate
    * @param {number} centerY - Center Y coordinate
    */
-  configureFilter(config, centerX, centerY) {
+  configureFilter(config: object, centerX: number, centerY: number) {
     const intensity = this.intensity
+
+    if (!this.filter) return;
 
     switch (this.type) {
       case "wave":
@@ -316,7 +326,7 @@ export class DistortionSystem {
    * Create GSAP animation timeline for the effect
    * @param {Object} config - Filter configuration
    */
-  createAnimationTimeline(config) {
+  createAnimationTimeline(config: object) {
     this.timeline = gsap.timeline({ repeat: -1, yoyo: true })
 
     switch (this.type) {
@@ -377,7 +387,7 @@ export class DistortionSystem {
    * @param {number} newIntensity - New intensity value
    * @param {number} duration - Transition duration
    */
-  setIntensity(newIntensity, duration = 0.5) {
+  setIntensity(newIntensity: number, duration: number = 0.5) {
     const oldIntensity = this.intensity
     this.intensity = clamp(newIntensity, 0, 3)
     
@@ -469,12 +479,19 @@ export class DistortionSystem {
  * Advanced particle system using GSAP for animations
  */
 export class ParticleSystem {
+  container: any
+  particles: never[]
+  particlePool: never[]
+  activeAnimations: Set<unknown>
+  maxParticles: any
+  poolSize: any
+  isPaused: boolean
   /**
    * Create a new particle system
-   * @param {PIXI.Container} parent - Parent container
+   * @param {Container} parent - Parent container
    * @param {Object} options - Configuration options
    */
-  constructor(parent, options = {}) {
+  constructor(parent: Container, options: object = {}) {
     if(!Application) {
       error("visualEffectsEngine", "Cannot initialize ParticleSystem: PIXI environment invalid")
       return
@@ -518,9 +535,9 @@ export class ParticleSystem {
   /**
    * Get particle from pool with smart recycling
    * @private
-   * @returns {Application.Graphics} Particle object
+   * @returns {Graphics} Particle object
    */
-  _getParticle() {
+  _getParticle(): Graphics {
     if (this.particles.length >= this.maxParticles) {
       const oldestParticle = this.particles.shift()
       this._recycleParticle(oldestParticle)
@@ -541,9 +558,9 @@ export class ParticleSystem {
   /**
    * Return particle to pool
    * @private
-   * @param {Application.Graphics} particle - Particle to recycle
+   * @param {Graphics} particle - Particle to recycle
    */
-  _recycleParticle(particle) {
+  _recycleParticle(particle: Graphics) {
     if (!particle) return
 
     gsap.killTweensOf(particle)
@@ -566,12 +583,12 @@ export class ParticleSystem {
 
   /**
    * Emit particles with GSAP animations
-   * @param {Application.Sprite} sprite - Source sprite
+   * @param {Sprite} sprite - Source sprite
    * @param {string} type - Particle type
    * @param {number} intensity - Emission intensity
    * @param {Object} options - Additional options
    */
-  emit(sprite, type = "sparkle", intensity = 1, options = {}) {
+  emit(sprite: Sprite, type: string = "sparkle", intensity: number = 1, options: object = {}) {
     if (!sprite || !sprite.parent) {
       warn("visualEffectsEngine", "Cannot emit particles: invalid sprite")
       return
@@ -592,13 +609,13 @@ export class ParticleSystem {
   /**
    * Create individual particle with GSAP animation
    * @private
-   * @param {Application.Sprite} sprite - Source sprite
+   * @param {Sprite} sprite - Source sprite
    * @param {Object} config - Particle configuration
    * @param {number} intensity - Intensity multiplier
    * @param {string} customColor - Custom color override
    * @param {number} spread - Position spread multiplier
    */
-  _createParticle(sprite, config, intensity, customColor, spread) {
+  _createParticle(sprite: Sprite, config: object, intensity: number, customColor: string, spread: number) {
     const particle = this._getParticle()
     if (!particle) return
 
@@ -664,10 +681,10 @@ export class ParticleSystem {
 
   /**
    * Create explosion effect with enhanced visuals
-   * @param {Application.Sprite|Object} target - Target sprite or position
+   * @param {Sprite|Object} target - Target sprite or position
    * @param {Object} options - Explosion options
    */
-  createExplosion(target, options = {}) {
+  createExplosion(target: Sprite | object, options: object = {}) {
     const {
       color = "#ff6600",
       count = 20,
@@ -823,6 +840,10 @@ export class ParticleSystem {
  * Centralized effect management system
  */
 export class EffectManager {
+  particleSystems: Map<any, any>
+  distortionEffects: Map<any, any>
+  globalTimeline: gsap.core.Timeline
+  isPaused: boolean
   constructor() {
     this.particleSystems = new Map()
     this.distortionEffects = new Map()
@@ -833,11 +854,11 @@ export class EffectManager {
   /**
    * Create a new particle system
    * @param {string} name - System name
-   * @param {Application.Container} parent - Parent container
+   * @param {Container} parent - Parent container
    * @param {Object} options - Configuration options
    * @returns {ParticleSystem} Created particle system
    */
-  createParticleSystem(name, parent, options = {}) {
+  createParticleSystem(name: string, parent: Container, options: object = {}): ParticleSystem {
     if (this.particleSystems.has(name)) {
       warn("visualEffectsEngine", `Particle system '${name}' already exists`)
       return this.particleSystems.get(name)
@@ -851,13 +872,13 @@ export class EffectManager {
   /**
    * Create a new distortion effect
    * @param {string} name - Effect name
-   * @param {Application.Sprite} sprite - Target sprite
+   * @param {Sprite} sprite - Target sprite
    * @param {string} type - Effect type
    * @param {number} intensity - Effect intensity
    * @param {Object} options - Additional options
    * @returns {DistortionSystem} Created distortion effect
    */
-  createDistortionEffect(name, sprite, type, intensity, options = {}) {
+  createDistortionEffect(name: string, sprite: Sprite, type: string, intensity: number, options: object = {}): DistortionSystem {
     if (this.distortionEffects.has(name)) {
       warn("visualEffectsEngine", `Distortion effect '${name}' already exists`)
       return this.distortionEffects.get(name)
@@ -873,7 +894,7 @@ export class EffectManager {
    * @param {string} name - System name
    * @returns {ParticleSystem|null} Particle system or null
    */
-  getParticleSystem(name) {
+  getParticleSystem(name: string): ParticleSystem | null {
     return this.particleSystems.get(name) || null
   }
 
@@ -882,7 +903,7 @@ export class EffectManager {
    * @param {string} name - Effect name
    * @returns {DistortionSystem|null} Distortion effect or null
    */
-  getDistortionEffect(name) {
+  getDistortionEffect(name: string): DistortionSystem | null {
     return this.distortionEffects.get(name) || null
   }
 
@@ -930,11 +951,11 @@ export class EffectManager {
 
 /**
  * Apply visual effects to a sprite
- * @param {Application.Sprite} sprite - Target sprite
+ * @param {Sprite} sprite - Target sprite
  * @param {Object} appearance - Appearance configuration
  * @param {EffectManager} effectManager - Effect manager instance
  */
-export function applyVisualEffects(sprite, appearance, effectManager) {
+export function applyVisualEffects(sprite: Sprite, appearance: object, effectManager: EffectManager) {
   if (!Application || !sprite || !appearance) {
     warn("visualEffectsEngine", "Cannot apply visual effects: invalid input")
     return
@@ -1040,10 +1061,10 @@ export function applyVisualEffects(sprite, appearance, effectManager) {
 
 /**
  * Update visual effects for all sprites
- * @param {Application.Sprite[]} sprites - Array of sprites
+ * @param {Sprite[]} sprites - Array of sprites
  * @param {number} deltaTime - Delta time in milliseconds
  */
-export function updateVisualEffects(sprites, deltaTime) {
+export function updateVisualEffects(sprites: Sprite[], deltaTime: number) {
   if (!Application) return
 
   sprites.forEach(sprite => {

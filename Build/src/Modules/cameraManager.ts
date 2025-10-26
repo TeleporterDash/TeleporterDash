@@ -10,6 +10,7 @@ setLogLevel("debug")
  * Handles camera movement, tracking, and effects for the game
  */
 export default class CameraManager {
+  x: number
   constructor(container, levelWidth, levelHeight, viewportWidth, viewportHeight) {
     this.container = container
     this.levelWidth = levelWidth

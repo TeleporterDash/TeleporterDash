@@ -11,9 +11,6 @@ import { pregenerateTextures } from './Modules/animationEngine';
 import CameraManager from './Modules/cameraManager';
 import musicSync, { MusicSync } from './Modules/musicSync';
 import { Application, WebGLRenderer, VERSION } from 'pixi.js';
-import { keys } from 'localforage';
-import audioManager from './Modules/audioManager';
-import cameraManager from './Modules/cameraManager';
 
 // Create global instances
 window.audioManager = new AudioManager();
@@ -38,392 +35,369 @@ window.keys = {};
 window.blockSize = 32;
 window.pixiInitialized = false;
 window.gameStarted = false;
-window.isInitializing = false; // Default to auto restart
-let isInitializing = false;
+window.isInitializing = false;
 
-let pixiApp = null;
-
-async function initPixi() {
-  if (isInitializing) {
-    warn('combinedTest', 'Initialization already in progress, skipping...');
-    return;
-  }
-
-  isInitializing = true;
-  try {
-    // Create PIXI Application
-    if (!pixiApp) {
-      pixiApp = new Application();
-      if (!pixiApp) return;
-      await pixiApp.init({
-        canvas: document.getElementById('levelCanvas'),
-        width: 512,
-        height: 256,
-        backgroundColor: 0x222222,
-        antialias: true,
-        autoStart: true,
-        useBackBuffer: true,
-      });
+async function initPixi(): Promise<void> {
+    if (window.isInitializing) {
+        warn('combinedTest', 'Initialization already in progress, skipping...');
+        return;
     }
 
-    // Assign globally
-    window.pixiApp = pixiApp;
+    window.isInitializing = true;
+    try {
+        // Create PIXI Application
+        if (!window.pixiApp) {
+            window.pixiApp = new Application();
+            if (!window.pixiApp) return;
+            await window.pixiApp.init({
+                canvas: document.getElementById('levelCanvas') as HTMLCanvasElement,
+                width: 512,
+                height: 256,
+                backgroundColor: 0x222222,
+                antialias: true,
+                autoStart: true,
+                useBackBuffer: true,
+            });
+        }
 
-    verbose('combinedTest', 'PixiJS version:', VERSION || 'unknown');
-    debug('combinedTest', 'Renderer type:', pixiApp.renderer instanceof WebGLRenderer ? 'WebGL' : 'Canvas');
-    
-    // Load sprite assets if not already loaded
-    if (!spriteMap) {
-        spriteMap = await loadSprites('assets/Sprites');
-    }
+        verbose('combinedTest', 'PixiJS version:', VERSION || 'unknown');
+        debug('combinedTest', 'Renderer type:', window.pixiApp.renderer instanceof WebGLRenderer ? 'WebGL' : 'Canvas');
 
-    if (spriteMap.has('floor')) {
-        verbose('initPixi', "Found 'floor.svg' data in spriteMap.");
-    } else {
-        warn('initPixi', "Could not find 'floor.svg' data in spriteMap to map to type 'floor'. Ensure Sprites/floor.svg exists.");
-    }
+        // Load sprite assets if not already loaded
+        if (!window.spriteMap) {
+            window.spriteMap = await loadSprites('assets/Sprites');
+        }
 
-    // Create RenderEngine if not already created
-    if (!renderEngine) {
-        renderEngine = new RenderEngine(pixiApp, blockSize);
-        setRenderEngine(renderEngine);
-        renderEngine.setAudioManager(audioManager);
-        // Get the particle system from renderEngine
-        particleSystem = renderEngine.particleSystem;
-    }
+        if (window.spriteMap.has('floor')) {
+            verbose('initPixi', "Found 'floor.svg' data in spriteMap.");
+        } else {
+            warn('initPixi', "Could not find 'floor.svg' data in spriteMap to map to type 'floor'. Ensure Sprites/floor.svg exists.");
+        }
 
-    // Initialize audio if not already initialized
-    if (!audioManager.initialized) {
-        await audioManager.initialize('../assets/Sound/Level Soundtracks/level1');
-    }
+        // Create RenderEngine if not already created
+        if (!window.renderEngine) {
+            window.renderEngine = new RenderEngine(window.pixiApp, window.blockSize);
+            setRenderEngine(window.renderEngine);
+            window.renderEngine.setAudioManager(window.audioManager);
+            // Get the particle system from renderEngine
+            window.particleSystem = window.renderEngine.particleSystem;
+        }
 
-    // Initialize musicSync if not already initialized
-    if (!musicSync) {
-        musicSync = new MusicSync(audioManager);
-    }
+        // Initialize audio if not already initialized
+        if (!window.audioManager.initialized) {
+            await window.audioManager.initialize('../assets/Sound/Level Soundtracks/level1');
+        }
 
-    debug('combinedTest', 'PixiJS initialized, sprites loaded');
-    pixiInitialized = true;
+        // Initialize musicSync if not already initialized
+        if (!window.musicSync) {
+            window.musicSync = new MusicSync(window.audioManager);
+        }
 
-    // Enable controls
-    document.querySelectorAll('.controls button').forEach(button => button.disabled = false);
+        debug('combinedTest', 'PixiJS initialized, sprites loaded');
+        window.pixiInitialized = true;
+
+        // Enable controls
+        document.querySelectorAll('.controls button').forEach((button: HTMLButtonElement) => button.disabled = false);
 
     } catch (err) {
-    error('combinedTest', 'PixiJS initialization failed:', err);
-    document.getElementById('matrixOutput').value = `Error: ${err.message}`;
-    throw err;
+        error('combinedTest', 'PixiJS initialization failed:', err);
+        document.getElementById('matrixOutput').value = `Error: ${err.message}`;
+        throw err;
     } finally {
-    isInitializing = false;
+        window.isInitializing = false;
     }
 }
 
-async function initializeGameFromMatrix() {
-    if (isInitializing) {
-    warn('gameTest', 'Initialization already in progress, skipping...');
-    return;
+async function initializeGameFromMatrix(): Promise<void> {
+    if (window.isInitializing) {
+        warn('gameTest', 'Initialization already in progress, skipping...');
+        return;
     }
 
-    isInitializing = true;
+    window.isInitializing = true;
     try {
-    debug('gameTest', 'Initializing game from matrix...');
-    const matrixInput = document.getElementById('matrixInput').value;
-    const parsed = MatrixParser.parse(JSON.parse(matrixInput));
-    parsedMatrix = parsed;
-    
-    // Initialize render engine if not already initialized
-    if (renderEngine) {
-        renderEngine.matrix = parsedMatrix;
-        renderEngine.spriteMap = spriteMap;
-        renderEngine.blockSprites = []; // Clear existing sprites
-        await renderEngine.renderMatrix(parsedMatrix, spriteMap);
+        debug('gameTest', 'Initializing game from matrix...');
+        const matrixInput = document.getElementById('matrixInput') as HTMLTextAreaElement;
+        const parsed = MatrixParser.parse(JSON.parse(matrixInput.value));
+        window.parsedMatrix = parsed;
 
-        // Only render floor if it doesn't exist
-        if (!renderEngine.floorSprite || !renderEngine.floorSprite.parent) {
-        debug('gameTest', 'Floor sprite not found, rendering floor...');
-        renderEngine.renderFloor();
-        }
+        // Initialize render engine if not already initialized
+        if (window.renderEngine) {
+            window.renderEngine.matrix = window.parsedMatrix;
+            window.renderEngine.spriteMap = window.spriteMap;
+            window.renderEngine.blockSprites = []; // Clear existing sprites
+            await window.renderEngine.renderMatrix(window.parsedMatrix, window.spriteMap);
 
-        // Camera manager is now initialized earlier with physics engine
-        if (cameraManager) {
-        // Position initial camera view to show floor at bottom
-        const floorY = parsedMatrix.length * blockSize;
-        cameraManager.setPosition(0, Math.max(0, floorY - pixiApp.canvas.height + blockSize));
-
-        // Update camera position in render loop to follow player
-        const originalTickerCallback = renderEngine.tickerCallback;
-        renderEngine.tickerCallback = (delta) => {
-            originalTickerCallback(delta);
-
-            if (cameraManager && player && typeof player.x === 'number' && typeof player.y === 'number') {
-            const playerX = player.x * blockSize;
-            const playerY = player.y * blockSize;
-            const verticalOffset = -pixiApp.canvas.height * 0.2;
-            cameraManager.follow({ x: playerX, y: playerY }, 0, verticalOffset);
-            cameraManager.update();
+            // Only render floor if it doesn't exist
+            if (!window.renderEngine.floorSprite || !window.renderEngine.floorSprite.parent) {
+                debug('gameTest', 'Floor sprite not found, rendering floor...');
+                window.renderEngine.renderFloor();
             }
-        };
+
+            // Camera manager is now initialized earlier with physics engine
+            if (window.cameraManager) {
+                // Position initial camera view to show floor at bottom
+                const floorY = window.parsedMatrix.length * window.blockSize;
+                window.cameraManager.setPosition(0, Math.max(0, floorY - window.pixiApp!.canvas.height + window.blockSize));
+
+                // Update camera position in render loop to follow player
+                const originalTickerCallback = window.renderEngine.tickerCallback;
+                window.renderEngine.tickerCallback = (delta: number) => {
+                    originalTickerCallback(delta);
+
+                    if (window.cameraManager && window.player && typeof window.player.x === 'number' && typeof window.player.y === 'number') {
+                        const playerX = window.player.x * window.blockSize;
+                        const playerY = window.player.y * window.blockSize;
+                        const verticalOffset = -window.pixiApp!.canvas.height * 0.2;
+                        window.cameraManager.follow({ x: playerX, y: playerY }, 0, verticalOffset);
+                        window.cameraManager.update();
+                    }
+                };
+            }
         }
-    }
 
-    // Create camera manager first if it doesn't exist
-    if (!cameraManager) {
-        cameraManager = new CameraManager(
-            renderEngine.container,
-            parsedMatrix[0].length * blockSize, // level width
-            (parsedMatrix.length + 1) * blockSize, // level height (add 1 for floor)
-            pixiApp.canvas.width,
-            pixiApp.canvas.height
-        );
-        window.cameraManager = cameraManager;
-    }
-
-    // Only initialize physics engine if it doesn't exist
-    if (!physicsEngine) {
-        // Create physics engine with camera manager
-        physicsEngine = new PhysicsEngine(parsedMatrix, player, renderEngine, audioManager, cameraManager);
-    } else {
-        // Update existing physics engine with new matrix
-        physicsEngine.updateMatrix(parsedMatrix);
-
-        // Update camera manager if it exists
-        if (cameraManager) {
-        cameraManager.setBounds(
-            0,
-            parsedMatrix[0].length * blockSize,
-            0,
-            (parsedMatrix.length + 1) * blockSize
-        );
+        // Create camera manager first if it doesn't exist
+        if (!window.cameraManager) {
+            window.cameraManager = new CameraManager(
+                window.renderEngine!.container,
+                window.parsedMatrix[0].length * window.blockSize, // level width
+                (window.parsedMatrix.length + 1) * window.blockSize, // level height (add 1 for floor)
+                window.pixiApp!.canvas.width,
+                window.pixiApp!.canvas.height
+            );
+            window.cameraManager = window.cameraManager;
         }
-    }
-    
-    // Only initialize player if it doesn't exist
-    if (!physicsEngine) {
-        // Create physics engine with camera manager
-        physicsEngine = new PhysicsEngine(parsedMatrix, null, renderEngine, audioManager, cameraManager);
-    } else {
-        // Update existing physics engine with new matrix
-        physicsEngine.updateMatrix(parsedMatrix);
 
-        // Update camera manager if it exists
-        if (cameraManager) {
-        cameraManager.setBounds(
-            0,
-            parsedMatrix[0].length * blockSize,
-            0,
-            (parsedMatrix.length + 1) * blockSize
-        );
+        // Only initialize physics engine if it doesn't exist
+        if (!window.physicsEngine) {
+            // Create physics engine with camera manager
+            window.physicsEngine = new PhysicsEngine(window.parsedMatrix, window.player, window.renderEngine, window.audioManager, window.cameraManager);
+        } else {
+            // Update existing physics engine with new matrix
+            window.physicsEngine.updateMatrix(window.parsedMatrix);
+
+            // Update camera manager if it exists
+            if (window.cameraManager) {
+                window.cameraManager.setBounds(
+                    0,
+                    window.parsedMatrix[0].length * window.blockSize,
+                    0,
+                    (window.parsedMatrix.length + 1) * window.blockSize
+                );
+            }
         }
-    }
-    if (!player) {
-        // Start the player at the bottom left of the level
-        const startX = 1; // One block in from the left
-        const startY = parsedMatrix.length - 2; // Two blocks up from the bottom
-        debug('gameTest', `Creating player at (${startX}, ${startY}) in level ${parsedMatrix[0].length}x${parsedMatrix.length}`);
-        player = new Player(startX, startY, parsedMatrix[0].length, parsedMatrix.length, physicsEngine);
-        player.renderEngine = renderEngine;
-    }
-    
-    if (physicsEngine && !renderEngine.playerSprite) {
-        renderEngine.renderPlayer(player);
-    }
 
-    // Only start game loop if it hasn't been started
-    if (renderEngine && !gameStarted) {
-        renderEngine.startGameLoop(player, physicsEngine);
-        gameStarted = true;
-    }
+        // Only initialize player if it doesn't exist
+        if (!window.player) {
+            // Start the player at the bottom left of the level
+            const startX = 1; // One block in from the left
+            const startY = window.parsedMatrix.length - 2; // Two blocks up from the bottom
+            debug('gameTest', `Creating player at (${startX}, ${startY}) in level ${window.parsedMatrix[0].length}x${window.parsedMatrix.length}`);
+            window.player = new Player(startX, startY, window.parsedMatrix[0].length, window.parsedMatrix.length, window.physicsEngine);
+            window.player.renderEngine = window.renderEngine;
+        }
 
-    // Update the matrix output
-    document.getElementById('matrixOutput').value = JSON.stringify(parsed, null, 2);
+        if (window.physicsEngine && !window.renderEngine!.playerSprite) {
+            window.renderEngine!.renderPlayer(window.player);
+        }
+
+        // Only start game loop if it hasn't been started
+        if (window.renderEngine && !window.gameStarted) {
+            window.renderEngine.startGameLoop(window.player, window.physicsEngine);
+            window.gameStarted = true;
+        }
+
+        // Update the matrix output
+        (document.getElementById('matrixOutput') as HTMLTextAreaElement).value = JSON.stringify(parsed, null, 2);
 
     } catch (err) {
-    error('gameTest', 'Error initializing game:', err);
-    document.getElementById('matrixOutput').value = `Error: ${err.message}`;
+        error('gameTest', 'Error initializing game:', err);
+        (document.getElementById('matrixOutput') as HTMLTextAreaElement).value = `Error: ${err.message}`;
     } finally {
-    isInitializing = false;
+        window.isInitializing = false;
     }
 }
 
-async function updateGameMatrix() {
-    if (!gameStarted || !physicsEngine || !renderEngine) {
-    warn('gameTest', 'Cannot update matrix: game not started or engines not initialized.');
-    return;
+async function updateGameMatrix(): Promise<void> {
+    if (!window.gameStarted || !window.physicsEngine || !window.renderEngine) {
+        warn('gameTest', 'Cannot update matrix: game not started or engines not initialized.');
+        return;
     }
     try {
-    debug('gameTest', 'Updating game matrix...');
-    const matrixInput = document.getElementById('matrixInput').value;
-    const newParsedMatrix = MatrixParser.parse(JSON.parse(matrixInput));
+        debug('gameTest', 'Updating game matrix...');
+        const matrixInput = document.getElementById('matrixInput') as HTMLTextAreaElement;
+        const newParsedMatrix = MatrixParser.parse(JSON.parse(matrixInput.value));
 
-    // Update engines with the new matrix (PhysicsEngine needs updateMatrix method)
-    parsedMatrix = newParsedMatrix; // Update global matrix reference
-    physicsEngine.updateMatrix(newParsedMatrix);
-    // Re-render using the updated matrix
-    await renderEngine.renderMatrix(newParsedMatrix, spriteMap);
-    // Optionally, reset player position or state here if needed
-    // player.resetPosition(newStartX, newStartY);
-    debug('gameTest', 'Game matrix updated and re-rendered.');
+        // Update engines with the new matrix (PhysicsEngine needs updateMatrix method)
+        window.parsedMatrix = newParsedMatrix; // Update global matrix reference
+        window.physicsEngine.updateMatrix(newParsedMatrix);
+        // Re-render using the updated matrix
+        await window.renderEngine!.renderMatrix(newParsedMatrix, window.spriteMap);
+        // Optionally, reset player position or state here if needed
+        // player.resetPosition(newStartX, newStartY);
+        debug('gameTest', 'Game matrix updated and re-rendered.');
 
     } catch (e) {
-    error('gameTest', 'Error updating matrix:', e);
+        error('gameTest', 'Error updating matrix:', e);
     }
 }
 
-async function handleApplyMatrixClick() {
-    const applyButton = document.getElementById('applyMatrixButton');
+async function handleApplyMatrixClick(): Promise<void> {
+    const applyButton = document.getElementById('applyMatrixButton') as HTMLButtonElement;
     if (applyButton) applyButton.disabled = true; // Disable button immediately
 
-    if (!gameStarted) {
-    debug('gameTest', 'Game not started, initializing...');
-    await initializeGameFromMatrix();
+    if (!window.gameStarted) {
+        debug('gameTest', 'Game not started, initializing...');
+        await initializeGameFromMatrix();
     } else {
-    debug('gameTest', 'Game started, updating matrix...');
-    await updateGameMatrix();
+        debug('gameTest', 'Game started, updating matrix...');
+        await updateGameMatrix();
     }
 }
 
-async function restartGame() {
+async function restartGame(): Promise<void> {
     console.log("Restarting game...");
-    if (!pixiInitialized) {
-    console.warn("Game not initialized, cannot restart.");
-    return;
+    if (!window.pixiInitialized) {
+        console.warn("Game not initialized, cannot restart.");
+        return;
     }
 
     // Hide game over screen if visible
-    const gameOverScreen = document.getElementById('gameOverScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen') as HTMLElement;
     if (gameOverScreen) {
-    gameOverScreen.style.display = 'none';
+        gameOverScreen.style.display = 'none';
     }
 
     // 1. Reset visual effects first
-    if (renderEngine) {
-    // Reset any active visual effects
-    if (renderEngine.particleSystem) {
-        renderEngine.particleSystem.reset();
-    }
-    
-    // Reset camera effects
-    if (cameraManager) {
-        cameraManager.resetEffects();
-    }
+    if (window.renderEngine) {
+        // Reset any active visual effects
+        if (window.renderEngine.particleSystem) {
+            window.renderEngine.particleSystem.reset();
+        }
+
+        // Reset camera effects
+        if (window.cameraManager) {
+            window.cameraManager.resetEffects();
+        }
     }
 
     // 2. Reset Player State
-    if (player) {
-    player.reset();
+    if (window.player) {
+        window.player.reset();
     } else {
-    console.error("Player not found during restart!");
-    return; // Cannot proceed without player
+        console.error("Player not found during restart!");
+        return; // Cannot proceed without player
     }
 
     // 3. Reset Render Engine (clears sprites, etc.)
-    if (renderEngine) {
-    renderEngine.reset();
+    if (window.renderEngine) {
+        window.renderEngine.reset();
     }
 
     // 4. Reset audio
-    if (audioManager) {
-    audioManager.pauseBackgroundMusic();
-    audioManager.playBackgroundMusic();
+    if (window.audioManager) {
+        window.audioManager.pauseBackgroundMusic();
+        window.audioManager.playBackgroundMusic();
     }
-    
-    if (musicSync) {
-    musicSync.reset();
+
+    if (window.musicSync) {
+        window.musicSync.reset();
     }
 
     // 5. Reset Camera and Physics (recenters on player start)
-    if (cameraManager) {
-    cameraManager.reset(player); // Pass player for initial position
+    if (window.cameraManager) {
+        window.cameraManager.reset(window.player); // Pass player for initial position
     }
-    
-    if (physicsEngine) {
-    verbose('gameTest', 'Resetting physics engine...');
-    physicsEngine.reset();
+
+    if (window.physicsEngine) {
+        verbose('gameTest', 'Resetting physics engine...');
+        window.physicsEngine.reset();
     }
 
     // 6. Re-render the current matrix and player
-    if (renderEngine && parsedMatrix && spriteMap) {
-    try {
-        // Re-render the static parts of the level
-        await renderEngine.renderMatrix(parsedMatrix, spriteMap);
-        
-        // Reset player sprite
-        if (renderEngine.playerSprite) {
-        if (renderEngine.playerSprite.parent) {
-            renderEngine.playerSprite.parent.removeChild(renderEngine.playerSprite);
+    if (window.renderEngine && window.parsedMatrix && window.spriteMap) {
+        try {
+            // Re-render the static parts of the level
+            await window.renderEngine.renderMatrix(window.parsedMatrix, window.spriteMap);
+
+            // Reset player sprite
+            if (window.renderEngine.playerSprite) {
+                if (window.renderEngine.playerSprite.parent) {
+                    window.renderEngine.playerSprite.parent.removeChild(window.renderEngine.playerSprite);
+                }
+                window.renderEngine.playerSprite.destroy();
+                window.renderEngine.playerSprite = null;
+            }
+            await window.renderEngine.renderPlayer(window.player); // Removed spriteMap parameter since it's now stored in renderEngine
+            // Restart the game loop within RenderEngine
+            window.renderEngine.startGameLoop(window.player, window.physicsEngine);
+        } catch (error) {
+            console.error("Error during game restart rendering:", error);
         }
-        renderEngine.playerSprite.destroy();
-        renderEngine.playerSprite = null;
-        }
-        await renderEngine.renderPlayer(player); // Removed spriteMap parameter since it's now stored in renderEngine
-        // Restart the game loop within RenderEngine
-        renderEngine.startGameLoop(player, physicsEngine);
-    } catch (error) {
-        console.error("Error during game restart rendering:", error);
-    }
     } else {
-    console.error("Cannot re-render during restart: Missing renderEngine, matrix, or spriteMap.");
+        console.error("Cannot re-render during restart: Missing renderEngine, matrix, or spriteMap.");
     }
 
     console.log("Game restart complete.");
 }
 
-function togglePause() {
-    isPaused = !isPaused;
-    const pauseMenu = document.getElementById('pauseMenu');
-    pauseMenu.style.display = isPaused ? 'block' : 'none';
+function togglePause(): void {
+    window.isPaused = !window.isPaused;
+    const pauseMenu = document.getElementById('pauseMenu') as HTMLElement;
+    pauseMenu.style.display = window.isPaused ? 'block' : 'none';
 
     // Update pause button text
-    const pauseButton = document.querySelector('#pauseMenu button[onclick="window.togglePause()"]');
+    const pauseButton = document.querySelector('#pauseMenu button[onclick="window.togglePause()"]') as HTMLButtonElement;
     if (pauseButton) {
-    pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
+        pauseButton.textContent = window.isPaused ? 'Resume' : 'Pause';
     }
-    const mainPauseButton = document.querySelector('.controls button[onclick="window.togglePause()"]');
+    const mainPauseButton = document.querySelector('.controls button[onclick="window.togglePause()"]') as HTMLButtonElement;
     if (mainPauseButton) {
-    mainPauseButton.textContent = isPaused ? 'Resume' : 'Pause';
+        mainPauseButton.textContent = window.isPaused ? 'Resume' : 'Pause';
     }
 
     // Pause/Resume the background music
-    if (audioManager) {
-    if (isPaused) {
-        // Explicitly call pauseBackgroundMusic which will save the current time
-        audioManager.pauseBackgroundMusic();
-    } else {
-        // This will resume from the saved time
-        audioManager.playBackgroundMusic();
-    }
+    if (window.audioManager) {
+        if (window.isPaused) {
+            // Explicitly call pauseBackgroundMusic which will save the current time
+            window.audioManager.pauseBackgroundMusic();
+        } else {
+            // This will resume from the saved time
+            window.audioManager.playBackgroundMusic();
+        }
     }
 }
 
-function toggleMute() {
+function toggleMute(): void {
     // Make sure audioManager exists
-    if (!audioManager) return;
+    if (!window.audioManager) return;
 
     // Toggle the mute state using the AudioManager method
-    audioManager.toggleMute();
+    window.audioManager.toggleMute();
 
     // Log the current state for debugging
-    verbose('gameTest', `Audio mute state toggled to: ${audioManager.isMuted ? 'muted' : 'unmuted'}`);
+    verbose('gameTest', `Audio mute state toggled to: ${window.audioManager.isMuted ? 'muted' : 'unmuted'}`);
 
     // Update the text on both mute buttons
-    const buttonText = audioManager.isMuted ? 'Unmute' : 'Mute';
+    const buttonText = window.audioManager.isMuted ? 'Unmute' : 'Mute';
 
-    const pauseMenuButton = document.querySelector('#pauseMenu button[onclick="window.toggleMute()"]');
+    const pauseMenuButton = document.querySelector('#pauseMenu button[onclick="window.toggleMute()"]') as HTMLButtonElement;
     if (pauseMenuButton) {
-    pauseMenuButton.textContent = buttonText;
+        pauseMenuButton.textContent = buttonText;
     }
 
-    const controlsButton = document.querySelector('.controls button[onclick="window.toggleMute()"]');
+    const controlsButton = document.querySelector('.controls button[onclick="window.toggleMute()"]') as HTMLButtonElement;
     if (controlsButton) {
-    controlsButton.textContent = buttonText;
+        controlsButton.textContent = buttonText;
     }
 
     // Let AudioManager handle the actual pausing/playing based on mute state
-    if (!audioManager.isMuted && !isPaused) {
-    // If unmuted and game is not paused, ensure music plays
-    audioManager.playBackgroundMusic();
-    } else if (audioManager.isMuted) {
-    // If muted, ensure music is paused (AudioManager's toggleMute should handle this)
-    audioManager.pauseBackgroundMusic(); // Ensure it's paused when muted
+    if (!window.audioManager.isMuted && !window.isPaused) {
+        // If unmuted and game is not paused, ensure music plays
+        window.audioManager.playBackgroundMusic();
+    } else if (window.audioManager.isMuted) {
+        // If muted, ensure music is paused (AudioManager's toggleMute should handle this)
+        window.audioManager.pauseBackgroundMusic(); // Ensure it's paused when muted
     }
 }
 
@@ -434,61 +408,61 @@ window.initializeGameFromMatrix = initializeGameFromMatrix;
 window.updateGameMatrix = updateGameMatrix; // Expose update function
 window.handleApplyMatrixClick = handleApplyMatrixClick; // Expose button handler
 
-window.startLevel = async function startLevel() {
-    if (gameStarted) {
-    return;
+window.startLevel = async function startLevel(): Promise<void> {
+    if (window.gameStarted) {
+        return;
     }
 
     try {
-    // Initialize audio if not already initialized
-    if (!audioManager.isInitialized) {
-        await audioManager.initialize('../assets/Sound/Level Soundtracks/level1');
-    }
+        // Initialize audio if not already initialized
+        if (!window.audioManager.isInitialized) {
+            await window.audioManager.initialize('../assets/Sound/Level Soundtracks/level1');
+        }
 
-    // Start background music
-    audioManager.playBackgroundMusic();
+        // Start background music
+        window.audioManager.playBackgroundMusic();
 
-    // Initialize game if not already initialized
-    if (!pixiInitialized) {
-        await initPixi();
-    }
+        // Initialize game if not already initialized
+        if (!window.pixiInitialized) {
+            await initPixi();
+        }
 
-    // Parse and render initial level
-    await initializeGameFromMatrix();
+        // Parse and render initial level
+        await initializeGameFromMatrix();
 
-    // Mark game as started
-    gameStarted = true;
+        // Mark game as started
+        window.gameStarted = true;
 
-    // Enable controls
-    document.querySelectorAll('.controls button').forEach(button => button.disabled = false);
+        // Enable controls
+        document.querySelectorAll('.controls button').forEach((button: HTMLButtonElement) => button.disabled = false);
 
     } catch (err) {
-    error('combinedTest', 'Failed to start level:', err);
-    document.getElementById('matrixOutput').value = `Error starting level: ${err.message}`;
+        error('combinedTest', 'Failed to start level:', err);
+        (document.getElementById('matrixOutput') as HTMLTextAreaElement).value = `Error starting level: ${err.message}`;
     }
 };
 
 initPixi();
 
-document.body.addEventListener('keydown', (e) => {
+document.body.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === ' ') {
-    e.preventDefault();
+        e.preventDefault();
     }
 });
 
-document.addEventListener('keydown', (e) => {
+document.addEventListener('keydown', (e: KeyboardEvent) => {
     verbose('combinedTest', 'Key down:', e.key);
-    keys[e.key] = true;
+    window.keys[e.key] = true;
 
     // Prevent scrolling for game control keys
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-    e.preventDefault();
+        e.preventDefault();
     }
 });
 
-document.addEventListener('keyup', (e) => {
+document.addEventListener('keyup', (e: KeyboardEvent) => {
     verbose('combinedTest', 'Key up:', e.key);
-    keys[e.key] = false;
+    window.keys[e.key] = false;
 });
 
 document.getElementById('matrixInput').addEventListener('input', async () => {
@@ -496,106 +470,106 @@ document.getElementById('matrixInput').addEventListener('input', async () => {
     // if (pixiInitialized) {
     //   await initializeGameFromMatrix(); // OLD behavior 
     // }
-    const applyButton = document.getElementById('applyMatrixButton');
+    const applyButton = document.getElementById('applyMatrixButton') as HTMLButtonElement;
     if (applyButton) applyButton.disabled = false; // Enable button when text changes
 });
 
 // Add game over screen toggle function
-window.toggleAutoRestart = function (checked) {
+window.toggleAutoRestart = function (checked: boolean): void {
     window.autoRestart = checked;
-    const checkbox = document.getElementById('autoRestart');
+    const checkbox = document.getElementById('autoRestart') as HTMLInputElement;
     checkbox.checked = checked;
 }
 
 // Add game over handler function
-window.handleGameOver = async function (action) {
+window.handleGameOver = async function (action: string): Promise<void> {
     // Hide the game over screen
-    const gameOverScreen = document.getElementById('gameOverScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen') as HTMLElement;
     if (gameOverScreen) {
-    gameOverScreen.style.display = 'none';
+        gameOverScreen.style.display = 'none';
     }
 
     // Unpause the game and all components
     window.isPaused = false;
     if (window.renderEngine) {
-    window.renderEngine.isPaused = false;
+        window.renderEngine.isPaused = false;
     }
     if (window.audioManager) {
-    window.audioManager.playBackgroundMusic();
+        window.audioManager.playBackgroundMusic();
     }
     if (window.physicsEngine) {
-    window.physicsEngine.isPaused = false;
+        window.physicsEngine.isPaused = false;
     }
     if (window.particleSystem) {
-    window.particleSystem.isPaused = false;
+        window.particleSystem.isPaused = false;
     }
 
     if (action === 'restart') {
-    await restartGame();
+        await restartGame();
     } else if (action === 'menu') {
-    // Add your menu navigation logic here
-    console.log('Returning to menu');
+        // Add your menu navigation logic here
+        console.log('Returning to menu');
     }
 }
 
 // Add toggle pause function
-window.togglePause = function () {
+window.togglePause = function (): void {
     const isPaused = window.isPaused;
     window.isPaused = !isPaused;
 
     // Show/hide pause menu
-    const pauseMenu = document.getElementById('pauseMenu');
+    const pauseMenu = document.getElementById('pauseMenu') as HTMLElement;
     if (pauseMenu) {
-    pauseMenu.style.display = window.isPaused ? 'block' : 'none';
+        pauseMenu.style.display = window.isPaused ? 'block' : 'none';
     }
 
     // Update render engine pause state
     if (window.renderEngine) {
-    window.renderEngine.isPaused = window.isPaused;
+        window.renderEngine.isPaused = window.isPaused;
     }
 
     // Update audio state
     if (window.audioManager) {
-    if (window.isPaused) {
-        window.audioManager.pauseBackgroundMusic();
-    } else {
-        window.audioManager.playBackgroundMusic();
-    }
+        if (window.isPaused) {
+            window.audioManager.pauseBackgroundMusic();
+        } else {
+            window.audioManager.playBackgroundMusic();
+        }
     }
 
     // Update physics engine pause state
     if (window.physicsEngine) {
-    window.physicsEngine.isPaused = window.isPaused;
+        window.physicsEngine.isPaused = window.isPaused;
     }
 
     // Update particle system pause state
     if (window.particleSystem) {
-    window.particleSystem.isPaused = window.isPaused;
+        window.particleSystem.isPaused = window.isPaused;
     }
 }
 
 // Add music behavior toggle functions
-window.toggleMusicOnDeath = function (checked) {
-    if (audioManager) {
-    audioManager.restartMusicOnDeath = checked;
-    const checkbox = document.getElementById('restartOnDeath');
-    checkbox.checked = checked;
+window.toggleMusicOnDeath = function (checked: boolean): void {
+    if (window.audioManager) {
+        window.audioManager.restartMusicOnDeath = checked;
+        const checkbox = document.getElementById('restartOnDeath') as HTMLInputElement;
+        checkbox.checked = checked;
     }
 }
 
-window.toggleMusicOnCompletion = function (checked) {
-    if (audioManager) {
-    audioManager.restartMusicOnCompletion = checked;
-    const checkbox = document.getElementById('restartOnCompletion');
-    checkbox.checked = checked;
+window.toggleMusicOnCompletion = function (checked: boolean): void {
+    if (window.audioManager) {
+        window.audioManager.restartMusicOnCompletion = checked;
+        const checkbox = document.getElementById('restartOnCompletion') as HTMLInputElement;
+        checkbox.checked = checked;
     }
 }
 
 // Initialize toggle states when audioManager is available
-if (typeof audioManager !== 'undefined' && audioManager) {
-    const deathCheckbox = document.getElementById('restartOnDeath');
-    const completionCheckbox = document.getElementById('restartOnCompletion');
+if (typeof window.audioManager !== 'undefined' && window.audioManager) {
+    const deathCheckbox = document.getElementById('restartOnDeath') as HTMLInputElement;
+    const completionCheckbox = document.getElementById('restartOnCompletion') as HTMLInputElement;
 
-    if (deathCheckbox) deathCheckbox.checked = audioManager.restartMusicOnDeath;
-    if (completionCheckbox) completionCheckbox.checked = audioManager.restartMusicOnCompletion;
+    if (deathCheckbox) deathCheckbox.checked = window.audioManager.restartMusicOnDeath;
+    if (completionCheckbox) completionCheckbox.checked = window.audioManager.restartMusicOnCompletion;
 }

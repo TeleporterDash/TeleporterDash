@@ -1,18 +1,39 @@
-import { applyVisualEffects, updateVisualEffects, EffectManager } from "./visualEffectsEngine"
-import { getLayerOrder } from "./layerManager"
-import { getSprite, getPlayerSprite, getFloorSprite } from "./spriteManager"
-import { isObjectActive } from "./groupManager"
-import { updateAnimations, pregenerateTextures, clearTextureCache, getTextureCache } from "./animationEngine"
-import { hexToNumber } from "./colorUtils"
-import { warn, error, debug, verbose, setLogLevel } from "./logManager"
-import { map, flatMap, filter } from "lodash"
-import { Container, Graphics, Text, Assets } from "pixi.js"
-
+import { applyVisualEffects, updateVisualEffects, EffectManager } from "./visualEffectsEngine";
+import { getLayerOrder } from "./layerManager";
+import { getSprite, getPlayerSprite, getFloorSprite } from "./spriteManager";
+import { isObjectActive } from "./groupManager";
+import { updateAnimations, pregenerateTextures, clearTextureCache, getTextureCache } from "./animationEngine";
+import { hexToNumber } from "./colorUtils";
+import { warn, error, debug, verbose, setLogLevel } from "./logManager";
+import { map, flatMap, filter } from "lodash";
+import { Container, Graphics, Text, Assets, Sprite, Application, TickerCallback } from "pixi.js";
 
 setLogLevel("debug");
 
 export class RenderEngine {
-  constructor(pixiApp, blockSize) {
+  pixiApp: Application;
+  blockSize: number;
+  container: Container;
+  blockSprites: Sprite[];
+  playerSprite: Sprite | null;
+  floorSprite: Sprite | null;
+  tickerCallback: TickerCallback<Sprite> | null;
+  matrix: any[][] | null; // Assuming 2D array of objects
+  spriteMap: Map<string, any> | null; // Assuming Map<string, {svg: string, ...}>
+  cameraManager: any | null; // Assuming CameraManager type, adjust if available
+  levelCompleteHandler: (() => void) | null;
+  isLevelComplete: boolean;
+  audioManager: any | null; // Assuming AudioManager type
+  isPaused: boolean;
+  lastUpdateTime: number;
+  pausedTime: number;
+  wasDead: boolean;
+  effectManager: EffectManager;
+  particleSystem: any; // Assuming ParticleSystem type
+  isFloorInitialized: boolean;
+  physics: any | null; // Assuming PhysicsEngine type
+
+  constructor(pixiApp: Application, blockSize: number) {
     this.pixiApp = pixiApp;
     this.blockSize = blockSize;
     this.container = new Container();
@@ -43,15 +64,15 @@ export class RenderEngine {
 
   /**
    * Clean up sprites and their particle containers
-   * @param {PIXI.Sprite[]} sprites - Array of sprites to clean up
-   * @param {Object} options - Destruction options
+   * @param {Sprite[]} sprites - Array of sprites to clean up
+   * @param {any} options - Destruction options
    */
-  cleanupSprites(sprites, options = { children: false, texture: false, baseTexture: false }) {
-    map(sprites, (sprite) => {
+  cleanupSprites(sprites: Sprite[], options: any = { children: false, texture: false, baseTexture: false }): Sprite[] {
+    map(sprites, (sprite: Sprite) => {
       try {
-        if (sprite.particleContainer && sprite.particleContainer.parent) {
-          sprite.particleContainer.parent.removeChild(sprite.particleContainer);
-          sprite.particleContainer.destroy({ children: true });
+        if (sprite && 'particleContainer' in sprite && (sprite as any).particleContainer && (sprite as any).particleContainer.parent) {
+          (sprite as any).particleContainer.parent.removeChild((sprite as any).particleContainer);
+          (sprite as any).particleContainer.destroy({ children: true });
         }
         if (sprite.parent) {
           sprite.parent.removeChild(sprite);
@@ -67,11 +88,12 @@ export class RenderEngine {
     return [];
   }
 
+
   /**
    * Initialize object appearance properties
-   * @param {Object} object - Game object
+   * @param {any} object - Game object
    */
-  initializeAppearance(object) {
+  initializeAppearance(object: any): any {
     object.appearance = object.appearance || {};
     object.appearance.color = object.appearance.color || {};
     return {
@@ -81,7 +103,7 @@ export class RenderEngine {
       baseColor: object.appearance.color?.base || "#888",
       tintColor: object.appearance.color?.tint || "0",
       tintIntensity: Number.parseFloat(object.appearance.color?.tintIntensity) || 0,
-      svg: this.spriteMap.get(String(object.type))?.svg,
+      svg: this.spriteMap?.get(String(object.type))?.svg,
       effectType: object.appearance?.effectType || "none",
       effectIntensity: Number.parseFloat(object.appearance?.effectIntensity) || 1,
       effectSpeed: Number.parseFloat(object.appearance?.effectSpeed) || 1,
@@ -90,13 +112,13 @@ export class RenderEngine {
 
   /**
    * Show visual feedback for modifier activation
-   * @param {Object} modifier - The modifier that was activated
+   * @param {any} modifier - The modifier that was activated
    */
-  async showModifierActivation(modifier) {
+  async showModifierActivation(modifier: any): Promise<void> {
     if (!modifier) return;
     const screenX = (modifier.x + 0.5) * this.blockSize;
     const screenY = (modifier.y + 0.5) * this.blockSize;
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
       this.particleSystem.createExplosion(
         { x: screenX, y: screenY },
         { color: "#00ffff", count: 20, maxRadius: this.blockSize * 0.8 }
@@ -108,7 +130,7 @@ export class RenderEngine {
   /**
    * Reset the render engine
    */
-  reset() {
+  reset(): void {
     this.stopGameLoop();
     this.isLevelComplete = false;
     this.resetAudio();
@@ -142,21 +164,21 @@ export class RenderEngine {
 
   /**
    * Render the game matrix
-   * @param {Array} matrix - Game matrix
-   * @param {Map} spriteMap - Sprite map
+   * @param {any[][]} matrix - Game matrix
+   * @param {Map<string, any>} spriteMap - Sprite map
    */
-  async renderMatrix(matrix, spriteMap) {
+  async renderMatrix(matrix: any[][], spriteMap: Map<string, any>): Promise<void> {
     this.matrix = matrix;
     this.spriteMap = spriteMap;
     this.blockSprites = this.cleanupSprites(this.blockSprites, { children: true });
-    const textureAssets = [];
+    const textureAssets: { alias: string; src: string }[] = [];
     debug("renderEngine", "Starting texture and effect initialization");
 
-    const objects = flatMap(matrix, (row, y) =>
-      map(row, (object, x) => ({ object, x, y }))
-    ).filter(({ object }) => object && isObjectActive(object) && object.type !== 0);
+    const objects = flatMap(matrix, (row: any[], y: number) =>
+      map(row, (object: any, x: number) => ({ object, x, y }))
+    ).filter(({ object }: { object: any }) => object && isObjectActive(object) && object.type !== 0);
 
-    map(objects, ({ object, x, y }) => {
+    map(objects, ({ object, x, y }: { object: any; x: number; y: number }) => {
       Object.assign(object, this.initializeAppearance(object));
       pregenerateTextures(object, x, y);
     });
@@ -175,7 +197,7 @@ export class RenderEngine {
 
     await this.renderFloor();
 
-    const blocks = map(getLayerOrder(matrix), ({ object, x, y }) => ({
+    const blocks = map(getLayerOrder(matrix), ({ object, x, y }: { object: any; x: number; y: number }) => ({
       object,
       x: x * this.blockSize + this.blockSize / 2,
       y: y * this.blockSize + this.blockSize / 2,
@@ -183,14 +205,13 @@ export class RenderEngine {
 
     for (const { object, x, y } of blocks) {
       if (!object || !isObjectActive(object)) continue;
-      let sprite;
+      let sprite: Sprite | Graphics;
       if (object.isModifier && object.modifierType) {
-        sprite = await getSprite(object.modifierType, spriteMap, { skipColorize: true });
-        if (!sprite) {
-          sprite = new Graphics()
-            .circle(0, 0, this.blockSize * 0.4)
-            .fill({ color: 0x8888ff, alpha: 0.7 })
-            .stroke({ width: 2, color: 0xffffff, alpha: 0.9 });
+        sprite = await getSprite(object.modifierType, spriteMap, { skipColorize: true }) || new Graphics()
+          .circle(0, 0, this.blockSize * 0.4)
+          .fill({ color: 0x8888ff, alpha: 0.7 })
+          .stroke({ width: 2, color: 0xffffff, alpha: 0.9 });
+        if (!(sprite instanceof Graphics) && !sprite) {
           const text = new Text(String(object.modifierType - 20), {
             fontFamily: "Arial",
             fontSize: this.blockSize * 0.4,
@@ -201,13 +222,9 @@ export class RenderEngine {
           sprite.addChild(text);
         }
       } else {
-        sprite = await getSprite(object.type, spriteMap, object.appearance?.color || { base: "#888", tint: "0", tintIntensity: 0 });
-        if (!sprite) {
-          warn("renderEngine", `No sprite for block type ${object.type} at [${x / this.blockSize},${y / this.blockSize}]`);
-          sprite = new Graphics()
-            .rect(-this.blockSize / 2, -this.blockSize / 2, this.blockSize, this.blockSize)
-            .fill({ color: hexToNumber(object.appearance?.color?.base || "#888") });
-        }
+        sprite = await getSprite(object.type, spriteMap, object.appearance?.color || { base: "#888", tint: "0", tintIntensity: 0 }) || new Graphics()
+          .rect(-this.blockSize / 2, -this.blockSize / 2, this.blockSize, this.blockSize)
+          .fill({ color: hexToNumber(object.appearance?.color?.base || "#888") });
       }
 
       sprite.x = x;
@@ -219,8 +236,8 @@ export class RenderEngine {
       );
       sprite.alpha = Number.parseFloat(object.appearance?.opacity) || 1;
       sprite.zIndex = Number.parseFloat(object.appearance?.depthOffset || 0) + Number.parseFloat(object.layer || 0) * 1000;
-      sprite.animation = object.animation || { pulseRate: 0, pulseAmplitude: 0, syncType: "0" };
-      sprite.blockData = object;
+      (sprite as any).animation = object.animation || { pulseRate: 0, pulseAmplitude: 0, syncType: "0" };
+      (sprite as any).blockData = object;
 
       applyVisualEffects(sprite, object.appearance, this.effectManager);
 
@@ -232,11 +249,11 @@ export class RenderEngine {
 
   /**
    * Set sprite transform properties
-   * @param {PIXI.Sprite} sprite - Sprite to transform
-   * @param {Object} data - Position and transformation data
-   * @param {Object} options - Additional options
+   * @param {Sprite} sprite - Sprite to transform
+   * @param {any} data - Position and transformation data
+   * @param {any} options - Additional options
    */
-  setSpriteTransform(sprite, data, options = {}) {
+  setSpriteTransform(sprite: Sprite, data: any, options: { xOffset?: number; yOffset?: number } = {}): void {
     const { xOffset = 0.5, yOffset = 0.5 } = options;
     sprite.x = (data.x + xOffset) * this.blockSize;
     sprite.y = (data.y + yOffset) * this.blockSize;
@@ -248,7 +265,7 @@ export class RenderEngine {
   /**
    * Render the floor sprite
    */
-  async renderFloor() {
+  async renderFloor(): Promise<void> {
     debug("renderEngine", "Rendering floor...");
     if (this.floorSprite) {
       if (this.floorSprite.parent) {
@@ -263,6 +280,7 @@ export class RenderEngine {
     }
     try {
       this.floorSprite = await getFloorSprite(this.spriteMap);
+      if (!this.floorSprite) return;
       this.floorSprite.width = this.pixiApp.screen.width * 5;
       this.floorSprite.height = this.blockSize;
       this.floorSprite.zIndex = -10;
@@ -283,22 +301,22 @@ export class RenderEngine {
   /**
    * Update floor position to follow camera
    */
-  updateFloorPosition() {
-    if (!this.floorSprite || !window.cameraManager) return;
+  updateFloorPosition(): void {
+    if (!this.floorSprite || !(window as any).cameraManager) return;
     const FLOOR_CONFIG = {
       WIDTH_MULTIPLIER: 5,
       Y_OFFSET: -2.25,
     };
-    this.floorSprite.x = (window.cameraManager.x || 0) - this.pixiApp.screen.width * 2;
+    this.floorSprite.x = ((window as any).cameraManager.x || 0) - this.pixiApp.screen.width * 2;
     this.floorSprite.y = this.pixiApp.screen.height + this.blockSize * FLOOR_CONFIG.Y_OFFSET;
   }
 
   /**
    * Re-render matrix and restore player position
-   * @param {Object} player - Player instance
-   * @param {Object} playerPos - Position to restore
+   * @param {any} player - Player instance
+   * @param {any} playerPos - Position to restore
    */
-  async reRenderMatrix(player, playerPos) {
+  async reRenderMatrix(player: any, playerPos: any): Promise<void> {
     if (!playerPos || !player || !this.matrix || !this.spriteMap) {
       warn("renderEngine", "reRenderMatrix called without required arguments");
       return;
@@ -313,8 +331,8 @@ export class RenderEngine {
       if (prevX !== player.x || prevY !== player.y) {
         await this.renderPlayer(player);
       }
-      if (window.cameraManager) {
-        window.cameraManager.setPosition(player.x, player.y);
+      if ((window as any).cameraManager) {
+        (window as any).cameraManager.setPosition(player.x, player.y);
       }
       debug("renderEngine", "Matrix re-rendered and player position restored");
     } catch (err) {
@@ -324,9 +342,9 @@ export class RenderEngine {
 
   /**
    * Render the player sprite
-   * @param {Object} player - Player instance
+   * @param {any} player - Player instance
    */
-  async renderPlayer(player) {
+  async renderPlayer(player: any): Promise<void> {
     debug("renderEngine", "Starting renderPlayer...");
     if (this.playerSprite) {
       debug("renderEngine", "Cleaning up existing player sprite...");
@@ -355,12 +373,12 @@ export class RenderEngine {
 
   /**
    * Start the game loop
-   * @param {Object} player - Player instance
-   * @param {Object} physics - Physics engine
+   * @param {any} player - Player instance
+   * @param {any} physics - Physics engine
    */
-  startGameLoop(player, physics) {
+  startGameLoop(player: any, physics: any): void {
     let lastTime = performance.now();
-    this.tickerCallback = (delta) => {
+    this.tickerCallback = (delta: number) => {
       const currentTime = performance.now();
       const deltaTimeSeconds = (currentTime - lastTime) / 1000;
       lastTime = currentTime;
@@ -370,23 +388,23 @@ export class RenderEngine {
       this.updatePlayerPosition(player, player.rotation);
       if (!this.isPaused) {
         updateVisualEffects(this.blockSprites, deltaTimeSeconds, this.effectManager);
-        map(this.blockSprites, (sprite) => {
-          const effectType = sprite.blockData?.appearance?.effectType;
+        map(this.blockSprites, (sprite: Sprite) => {
+          const effectType = (sprite as any).blockData?.appearance?.effectType;
           if (effectType && effectType !== "none") {
-            const intensity = Number.parseFloat(sprite.blockData.appearance.effectIntensity) || 1;
+            const intensity = Number.parseFloat((sprite as any).blockData.appearance.effectIntensity) || 1;
             this.particleSystem.emit(sprite, effectType, intensity);
           }
         });
       }
-      if (window.cameraManager && player) {
+      if ((window as any).cameraManager && player) {
         const playerX = player.x * this.blockSize;
         const playerY = player.y * this.blockSize;
-        window.cameraManager.follow({ x: playerX, y: playerY }, 0, -this.pixiApp.canvas.height * 0.2);
-        window.cameraManager.update();
+        (window as any).cameraManager.follow({ x: playerX, y: playerY }, 0, -this.pixiApp.canvas.height * 0.2);
+        (window as any).cameraManager.update();
       }
       if (this.isFloorInitialized) {
         this.updateFloorPosition();
-        verbose("renderEngine", "Updated floor position:", this.floorSprite.x, this.floorSprite.y);
+        verbose("renderEngine", "Updated floor position:", this.floorSprite!.x, this.floorSprite!.y);
       }
       if (!this.matrix || !this.blockSprites) {
         warn("renderEngine", "Cannot update animations: matrix or sprites not initialized");
@@ -414,10 +432,10 @@ export class RenderEngine {
 
   /**
    * Update player sprite position and rotation
-   * @param {Object} player - Player instance
+   * @param {any} player - Player instance
    * @param {number} rotation - Rotation in degrees
    */
-  updatePlayerPosition(player, rotation) {
+  updatePlayerPosition(player: any, rotation?: number): void {
     if (!this.playerSprite) return;
     this.setSpriteTransform(this.playerSprite, { ...player, rotation }, { xOffset: 0.5, yOffset: 0.75 });
     verbose("renderEngine", `Player position updated: x=${player.x}, y=${player.y}, visualY=${player.y + 0.75}, rotation=${rotation || player.rotation || 0}`);
@@ -426,7 +444,7 @@ export class RenderEngine {
   /**
    * Stop the game loop
    */
-  stopGameLoop() {
+  stopGameLoop(): void {
     if (this.tickerCallback) {
       this.pixiApp.ticker.remove(this.tickerCallback);
       this.tickerCallback = null;
@@ -438,7 +456,7 @@ export class RenderEngine {
    * Set pause state
    * @param {boolean} isPaused - Pause or resume
    */
-  setPaused(isPaused) {
+  setPaused(isPaused: boolean): void {
     this.isPaused = isPaused;
     if (isPaused) {
       this.pausedTime = Date.now();
@@ -454,13 +472,13 @@ export class RenderEngine {
    * Update the render engine
    * @param {number} deltaTime - Time since last update
    */
-  update(deltaTime) {
+  update(deltaTime: number): void {
     if (this.isPaused) return;
     const now = Date.now();
     deltaTime = now - this.lastUpdateTime;
     this.lastUpdateTime = now;
-    if (window.physicsEngine) window.physicsEngine.update(deltaTime);
-    if (window.cameraManager) window.cameraManager.update(deltaTime);
+    if ((window as any).physicsEngine) (window as any).physicsEngine.update(deltaTime);
+    if ((window as any).cameraManager) (window as any).cameraManager.update(deltaTime);
     if (this.isFloorInitialized) this.updateFloorPosition();
     this.effectManager.update(deltaTime);
   }
@@ -468,7 +486,7 @@ export class RenderEngine {
   /**
    * Handle level completion
    */
-  handleLevelComplete() {
+  handleLevelComplete(): void {
     if (this.isLevelComplete) return;
     this.isLevelComplete = true;
     debug("renderEngine", "Handling level completion");
@@ -478,11 +496,11 @@ export class RenderEngine {
     const levelCompleteElement = document.getElementById("levelComplete");
     if (levelCompleteElement) {
       levelCompleteElement.style.display = "block";
-      levelCompleteElement.style.opacity = 0;
+      levelCompleteElement.style.opacity = "0";
       let opacity = 0;
       const fadeInterval = setInterval(() => {
         opacity += 0.15;
-        levelCompleteElement.style.opacity = opacity;
+        levelCompleteElement.style.opacity = opacity.toString();
         if (opacity >= 1) clearInterval(fadeInterval);
       }, 15);
     }
@@ -491,7 +509,7 @@ export class RenderEngine {
   /**
    * Create level complete UI
    */
-  createLevelCompleteUI() {
+  createLevelCompleteUI(): void {
     debug("renderEngine", "Creating level complete UI");
     if (document.getElementById("levelComplete")) return;
     const levelCompleteElement = document.createElement("div");
@@ -527,21 +545,21 @@ export class RenderEngine {
       <button id="menuBtn">Back to Menu</button>
     `;
     document.body.appendChild(levelCompleteElement);
-    document.getElementById("nextLevelBtn").addEventListener("click", () => {
+    (document.getElementById("nextLevelBtn") as HTMLButtonElement).addEventListener("click", () => {
       const urlParams = new URLSearchParams(window.location.search);
       const currentLevel = Number.parseInt(urlParams.get("level") || "1");
       window.location.href = `?level=${currentLevel + 1}`;
     });
-    document.getElementById("menuBtn").addEventListener("click", () => {
+    (document.getElementById("menuBtn") as HTMLButtonElement).addEventListener("click", () => {
       window.location.href = "../TDMenu.html";
     });
   }
 
   /**
    * Set AudioManager reference
-   * @param {Object} audioManager - AudioManager instance
+   * @param {any} audioManager - AudioManager instance
    */
-  setAudioManager(audioManager) {
+  setAudioManager(audioManager: any): void {
     this.audioManager = audioManager;
     debug("renderEngine", "AudioManager reference set");
   }
@@ -549,7 +567,7 @@ export class RenderEngine {
   /**
    * Reset audio state
    */
-  resetAudio() {
+  resetAudio(): void {
     if (!this.audioManager) {
       error("renderEngine", "No AudioManager available for reset");
       return;
@@ -568,7 +586,7 @@ export class RenderEngine {
   /**
    * Handle audio for level completion
    */
-  fadeOutAudio() {
+  fadeOutAudio(): void {
     if (!this.audioManager) {
       debug("renderEngine", "No AudioManager found for level completion");
       return;
