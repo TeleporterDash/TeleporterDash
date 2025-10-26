@@ -1,16 +1,19 @@
-import { log, warn, error, debug, verbose, setLogLevel } from './Modules/logManager.js';
-import AudioManager from './Modules/audioManager.js';
-import { MatrixParser } from './Modules/matrixParser.js';
-import { Player, PhysicsEngine } from './Modules/physicsEngine.js';
-import { getTeleportTarget } from './Modules/teleporterEngine.js';
-import { isObjectActive, setRenderEngine } from './Modules/groupManager.js';
-import { loadSprites } from './Modules/spriteManager.js';
-import { RenderEngine } from './Modules/renderEngine.js';
-import { ParticleSystem } from './Modules/visualEffectsEngine.js';
-import { pregenerateTextures } from './Modules/animationEngine.js';
-import CameraManager from './Modules/cameraManager.js';
-import { MusicSync } from './Modules/musicSync.js';
+import { log, warn, error, debug, verbose, setLogLevel } from './Modules/logManager';
+import AudioManager from './Modules/audioManager';
+import { MatrixParser } from './Modules/matrixParser';
+import { Player, PhysicsEngine } from './Modules/physicsEngine';
+import { getTeleportTarget } from './Modules/teleporterEngine';
+import { isObjectActive, setRenderEngine } from './Modules/groupManager';
+import { loadSprites } from './Modules/spriteManager';
+import { RenderEngine } from './Modules/renderEngine';
+import { ParticleSystem } from './Modules/visualEffectsEngine';
+import { pregenerateTextures } from './Modules/animationEngine';
+import CameraManager from './Modules/cameraManager';
+import musicSync, { MusicSync } from './Modules/musicSync';
 import { Application, WebGLRenderer, VERSION } from 'pixi.js';
+import { keys } from 'localforage';
+import audioManager from './Modules/audioManager';
+import cameraManager from './Modules/cameraManager';
 
 // Create global instances
 window.audioManager = new AudioManager();
@@ -51,6 +54,7 @@ async function initPixi() {
     // Create PIXI Application
     if (!pixiApp) {
       pixiApp = new Application();
+      if (!pixiApp) return;
       await pixiApp.init({
         canvas: document.getElementById('levelCanvas'),
         width: 512,
