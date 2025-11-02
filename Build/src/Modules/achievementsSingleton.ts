@@ -1,40 +1,57 @@
-import { AchievementManager } from "./achievementManager.js";
-import { storageManager } from "./storageManager.js";
-import { PopupManager } from "./popupManager.js";
-import AudioManager from "./audioManager.js";
+import { AchievementManager, type AchievementId } from "./achievementManager";
+import { storageManager } from "./storageManager";
+import { PopupManager } from "./popupManager";
+import AudioManager from "./audioManager";
+import ACHIEVEMENTS from "../JSON/achievements.json";
+
+type RunData = {
+  time: number;
+  deaths: number;
+  jumps: number;
+};
+
+const isAchievementId = (id: string): id is AchievementId => id in ACHIEVEMENTS;
+const updateIfValid = (id: string, progress: number): void => {
+  if (!isAchievementId(id)) {
+    return;
+  }
+  achievementManager.updateProgress(id, progress);
+};
 
 // Create a singleton instance of AchievementManager
 const achievementManager = new AchievementManager({
   audioManager: new AudioManager(),
   popupManager: new PopupManager(),
-  storageManager: storageManager,
+  storageManager,
   debugMode: true,
 });
 
 export const AchievementsManager = {
-  async checkAchievements(filename: string, runData: { time: number; deaths: number; jumps: number; }) {
-    // Example achievement checks based on run data
+  async checkAchievements(filename: string, runData: RunData): Promise<void> {
     if (filename === "level1" && runData.time < 30) {
-      achievementManager.updateProgress("speedster", 1);
+      updateIfValid("FIRST_WIN", 1);
     }
     if (runData.deaths === 0) {
-      achievementManager.updateProgress("flawless", 1);
+      updateIfValid("PERFECT_RUN", 1);
     }
     if (runData.jumps <= 5) {
-      achievementManager.updateProgress("minimalist", 1);
+      updateIfValid("NO_DEATHS", 1);
     }
-    // Add more achievement conditions as defined in achievements.json
   },
 
   // Expose AchievementManager instance methods if needed
   init: () => achievementManager.init(),
-  updateProgress: (id: any, progress: number | undefined) =>
+  updateProgress: (id: AchievementId, progress = 1) =>
     achievementManager.updateProgress(id, progress),
-  unlockAchievement: (id: any) => achievementManager.unlockAchievement(id),
-  getAchievementProgress: (id: any) => achievementManager.getAchievementProgress(id),
-  isUnlocked: (id: any) => achievementManager.isUnlocked(id),
+  unlockAchievement: (id: AchievementId) =>
+    achievementManager.unlockAchievement(id),
+  getAchievementProgress: (id: AchievementId) =>
+    achievementManager.getAchievementProgress(id),
+  isUnlocked: (id: AchievementId) => achievementManager.isUnlocked(id),
   getTotalPoints: () => achievementManager.getTotalPoints(),
   getUnlockedAchievements: () => achievementManager.getUnlockedAchievements(),
   getAllAchievements: () => achievementManager.getAllAchievements(),
-  getAchievement: (id: any) => achievementManager.getAchievement(id),
+  getAchievement: (id: AchievementId) => achievementManager.getAchievement(id),
 };
+
+export { achievementManager };

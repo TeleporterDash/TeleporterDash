@@ -1,14 +1,35 @@
-import { applyVisualEffects, updateVisualEffects, EffectManager } from "./visualEffectsEngine";
+import {
+  applyVisualEffects,
+  updateVisualEffects,
+  EffectManager,
+} from "./visualEffectsEngine";
 import { getLayerOrder } from "./layerManager";
 import { getSprite, getPlayerSprite, getFloorSprite } from "./spriteManager";
+import type { SpriteMap } from "./spriteManager";
 import { isObjectActive } from "./groupManager";
-import { updateAnimations, pregenerateTextures, clearTextureCache, getTextureCache } from "./animationEngine";
+import {
+  updateAnimations,
+  pregenerateTextures,
+  clearTextureCache,
+  getTextureCache,
+} from "./animationEngine";
 import { hexToNumber } from "./colorUtils";
 import { warn, error, debug, verbose, setLogLevel } from "./logManager";
 import { map, flatMap, filter } from "lodash";
-import { Container, Graphics, Text, Assets, Sprite, Application, TickerCallback } from "pixi.js";
+import {
+  Container,
+  Text,
+  Assets,
+  Sprite,
+  Application,
+  Texture,
+  TickerCallback,
+} from "pixi.js";
+import type { IDestroyOptions } from "@pixi/display";
 
 setLogLevel("debug");
+
+type RenderTickerCallback = (delta: number) => void;
 
 export class RenderEngine {
   pixiApp: Application;
@@ -17,9 +38,9 @@ export class RenderEngine {
   blockSprites: Sprite[];
   playerSprite: Sprite | null;
   floorSprite: Sprite | null;
-  tickerCallback: TickerCallback<Sprite> | null;
+  tickerCallback: RenderTickerCallback | null;
   matrix: any[][] | null; // Assuming 2D array of objects
-  spriteMap: Map<string, any> | null; // Assuming Map<string, {svg: string, ...}>
+  spriteMap: SpriteMap | null; // Map of sprite definitions by type
   cameraManager: any | null; // Assuming CameraManager type, adjust if available
   levelCompleteHandler: (() => void) | null;
   isLevelComplete: boolean;
@@ -54,24 +75,44 @@ export class RenderEngine {
     this.pausedTime = 0;
     this.wasDead = false;
     this.effectManager = new EffectManager();
-    this.particleSystem = this.effectManager.createParticleSystem("main", this.container, {
-      maxParticles: 500,
-      poolSize: 100,
-      zIndex: 10,
-    });
+    this.particleSystem = this.effectManager.createParticleSystem(
+      "main",
+      this.container,
+      {
+        maxParticles: 500,
+        poolSize: 100,
+        zIndex: 10,
+      }
+    );
+    this.isFloorInitialized = false;
     debug("renderEngine", "RenderEngine initialized with particle system");
   }
+
+  private static readonly DESTROY_OPTIONS: IDestroyOptions = {
+    children: false,
+    texture: false,
+  };
 
   /**
    * Clean up sprites and their particle containers
    * @param {Sprite[]} sprites - Array of sprites to clean up
    * @param {any} options - Destruction options
    */
-  cleanupSprites(sprites: Sprite[], options: any = { children: false, texture: false, baseTexture: false }): Sprite[] {
+  cleanupSprites(
+    sprites: Sprite[],
+    options: IDestroyOptions = RenderEngine.DESTROY_OPTIONS
+  ): Sprite[] {
     map(sprites, (sprite: Sprite) => {
       try {
-        if (sprite && 'particleContainer' in sprite && (sprite as any).particleContainer && (sprite as any).particleContainer.parent) {
-          (sprite as any).particleContainer.parent.removeChild((sprite as any).particleContainer);
+        if (
+          sprite &&
+          "particleContainer" in sprite &&
+          (sprite as any).particleContainer &&
+          (sprite as any).particleContainer.parent
+        ) {
+          (sprite as any).particleContainer.parent.removeChild(
+            (sprite as any).particleContainer
+          );
           (sprite as any).particleContainer.destroy({ children: true });
         }
         if (sprite.parent) {
@@ -88,7 +129,6 @@ export class RenderEngine {
     return [];
   }
 
-
   /**
    * Initialize object appearance properties
    * @param {any} object - Game object
@@ -97,15 +137,19 @@ export class RenderEngine {
     object.appearance = object.appearance || {};
     object.appearance.color = object.appearance.color || {};
     return {
-      colorShiftRate: Number.parseFloat(object.appearance.color?.shiftRate) || 0,
+      colorShiftRate:
+        Number.parseFloat(object.appearance.color?.shiftRate) || 0,
       colorPulse: object.appearance.color?.pulseColor || "0",
-      colorPulseRate: Number.parseFloat(object.appearance.color?.pulseRate) || 0,
+      colorPulseRate:
+        Number.parseFloat(object.appearance.color?.pulseRate) || 0,
       baseColor: object.appearance.color?.base || "#888",
       tintColor: object.appearance.color?.tint || "0",
-      tintIntensity: Number.parseFloat(object.appearance.color?.tintIntensity) || 0,
+      tintIntensity:
+        Number.parseFloat(object.appearance.color?.tintIntensity) || 0,
       svg: this.spriteMap?.get(String(object.type))?.svg,
       effectType: object.appearance?.effectType || "none",
-      effectIntensity: Number.parseFloat(object.appearance?.effectIntensity) || 1,
+      effectIntensity:
+        Number.parseFloat(object.appearance?.effectIntensity) || 1,
       effectSpeed: Number.parseFloat(object.appearance?.effectSpeed) || 1,
     };
   }
@@ -135,30 +179,38 @@ export class RenderEngine {
     this.isLevelComplete = false;
     this.resetAudio();
     this.effectManager.cleanup();
-    this.blockSprites = this.cleanupSprites(this.blockSprites, { children: false, texture: false, baseTexture: false });
+    this.blockSprites = this.cleanupSprites(
+      this.blockSprites,
+      RenderEngine.DESTROY_OPTIONS
+    );
     if (this.playerSprite) {
       if (this.playerSprite.parent) {
         this.playerSprite.parent.removeChild(this.playerSprite);
       }
-      this.playerSprite.destroy({ children: false, texture: false, baseTexture: false });
+      this.playerSprite.destroy(RenderEngine.DESTROY_OPTIONS);
       this.playerSprite = null;
     }
     if (this.floorSprite) {
       if (this.floorSprite.parent) {
         this.floorSprite.parent.removeChild(this.floorSprite);
       }
-      this.floorSprite.destroy({ children: false, texture: false, baseTexture: false });
+      this.floorSprite.destroy(RenderEngine.DESTROY_OPTIONS);
       this.floorSprite = null;
     }
     clearTextureCache();
     this.container.x = 0;
     this.container.y = 0;
+    this.isFloorInitialized = false;
     this.effectManager = new EffectManager();
-    this.particleSystem = this.effectManager.createParticleSystem("main", this.container, {
-      maxParticles: 500,
-      poolSize: 100,
-      zIndex: 10,
-    });
+    this.particleSystem = this.effectManager.createParticleSystem(
+      "main",
+      this.container,
+      {
+        maxParticles: 500,
+        poolSize: 100,
+        zIndex: 10,
+      }
+    );
     debug("renderEngine", "Reset complete - textures preserved for reuse");
   }
 
@@ -167,16 +219,21 @@ export class RenderEngine {
    * @param {any[][]} matrix - Game matrix
    * @param {Map<string, any>} spriteMap - Sprite map
    */
-  async renderMatrix(matrix: any[][], spriteMap: Map<string, any>): Promise<void> {
+  async renderMatrix(matrix: any[][], spriteMap: SpriteMap): Promise<void> {
     this.matrix = matrix;
     this.spriteMap = spriteMap;
-    this.blockSprites = this.cleanupSprites(this.blockSprites, { children: true });
+    this.blockSprites = this.cleanupSprites(this.blockSprites, {
+      children: true,
+    });
     const textureAssets: { alias: string; src: string }[] = [];
     debug("renderEngine", "Starting texture and effect initialization");
 
     const objects = flatMap(matrix, (row: any[], y: number) =>
       map(row, (object: any, x: number) => ({ object, x, y }))
-    ).filter(({ object }: { object: any }) => object && isObjectActive(object) && object.type !== 0);
+    ).filter(
+      ({ object }: { object: any }) =>
+        object && isObjectActive(object) && object.type !== 0
+    );
 
     map(objects, ({ object, x, y }: { object: any; x: number; y: number }) => {
       Object.assign(object, this.initializeAppearance(object));
@@ -192,59 +249,131 @@ export class RenderEngine {
       for (const { alias } of textureAssets) {
         cache.set(alias, Assets.get(alias));
       }
-      debug("renderEngine", "Preloaded animation textures:", map(textureAssets, "alias"));
+      debug(
+        "renderEngine",
+        "Preloaded animation textures:",
+        map(textureAssets, "alias")
+      );
     }
 
     await this.renderFloor();
 
-    const blocks = map(getLayerOrder(matrix), ({ object, x, y }: { object: any; x: number; y: number }) => ({
-      object,
-      x: x * this.blockSize + this.blockSize / 2,
-      y: y * this.blockSize + this.blockSize / 2,
-    }));
+    const blocks = map(
+      getLayerOrder(matrix),
+      ({ object, x, y }: { object: any; x: number; y: number }) => ({
+        object,
+        x: x * this.blockSize + this.blockSize / 2,
+        y: y * this.blockSize + this.blockSize / 2,
+      })
+    );
 
     for (const { object, x, y } of blocks) {
       if (!object || !isObjectActive(object)) continue;
-      let sprite: Sprite | Graphics;
-      if (object.isModifier && object.modifierType) {
-        sprite = await getSprite(object.modifierType, spriteMap, { skipColorize: true }) || new Graphics()
-          .circle(0, 0, this.blockSize * 0.4)
-          .fill({ color: 0x8888ff, alpha: 0.7 })
-          .stroke({ width: 2, color: 0xffffff, alpha: 0.9 });
-        if (!(sprite instanceof Graphics) && !sprite) {
-          const text = new Text(String(object.modifierType - 20), {
-            fontFamily: "Arial",
-            fontSize: this.blockSize * 0.4,
-            fill: 0xffffff,
-            align: "center",
-          });
-          text.anchor.set(0.5);
-          sprite.addChild(text);
-        }
-      } else {
-        sprite = await getSprite(object.type, spriteMap, object.appearance?.color || { base: "#888", tint: "0", tintIntensity: 0 }) || new Graphics()
-          .rect(-this.blockSize / 2, -this.blockSize / 2, this.blockSize, this.blockSize)
-          .fill({ color: hexToNumber(object.appearance?.color?.base || "#888") });
-      }
+
+      const sprite = await this.createObjectSprite(object, spriteMap);
 
       sprite.x = x;
       sprite.y = y;
       sprite.rotation = (object.transform?.rotation * Math.PI) / 180 || 0;
       sprite.scale.set(
-        (object.transform?.scale || 1) * (object.transform?.flip === "h" || object.transform?.flip === "hv" ? -1 : 1),
-        (object.transform?.scale || 1) * (object.transform?.flip === "v" || object.transform?.flip === "hv" ? -1 : 1)
+        (object.transform?.scale || 1) *
+          (object.transform?.flip === "h" || object.transform?.flip === "hv"
+            ? -1
+            : 1),
+        (object.transform?.scale || 1) *
+          (object.transform?.flip === "v" || object.transform?.flip === "hv"
+            ? -1
+            : 1)
       );
       sprite.alpha = Number.parseFloat(object.appearance?.opacity) || 1;
-      sprite.zIndex = Number.parseFloat(object.appearance?.depthOffset || 0) + Number.parseFloat(object.layer || 0) * 1000;
-      (sprite as any).animation = object.animation || { pulseRate: 0, pulseAmplitude: 0, syncType: "0" };
+      sprite.zIndex =
+        Number.parseFloat(object.appearance?.depthOffset || 0) +
+        Number.parseFloat(object.layer || 0) * 1000;
+      (sprite as any).animation = object.animation || {
+        pulseRate: 0,
+        pulseAmplitude: 0,
+        syncType: "0",
+      };
       (sprite as any).blockData = object;
 
       applyVisualEffects(sprite, object.appearance, this.effectManager);
 
       this.container.addChild(sprite);
       this.blockSprites.push(sprite);
-      verbose("renderEngine", `Rendered sprite type ${object.type} at [${x / this.blockSize - 0.5},${y / this.blockSize - 0.5}] with opacity ${sprite.alpha}, zIndex ${sprite.zIndex}`);
+      verbose(
+        "renderEngine",
+        `Rendered sprite type ${object.type} at [${x / this.blockSize - 0.5},${
+          y / this.blockSize - 0.5
+        }] with opacity ${sprite.alpha}, zIndex ${sprite.zIndex}`
+      );
     }
+  }
+
+  private async createObjectSprite(
+    object: any,
+    spriteMap: SpriteMap
+  ): Promise<Sprite> {
+    const sprite = await getSprite(
+      object.isModifier && object.modifierType
+        ? object.modifierType
+        : object.type,
+      spriteMap,
+      object.isModifier
+        ? { skipColorize: true }
+        : object.appearance?.color || {
+            base: "#888",
+            tint: "0",
+            tintIntensity: 0,
+          }
+    );
+
+    if (sprite) {
+      sprite.anchor.set(0.5);
+
+      if (object.isModifier && object.modifierType) {
+        this.ensureModifierLabel(sprite, object.modifierType);
+      }
+      return sprite;
+    }
+
+    return this.createFallbackSprite(object);
+  }
+
+  private ensureModifierLabel(sprite: Sprite, modifierType: number): void {
+    const existingLabel = sprite.children.find(
+      (child) => child.name === "modifier-label"
+    );
+    if (existingLabel && existingLabel instanceof Text) {
+      existingLabel.text = String(modifierType - 20);
+      return;
+    }
+
+    const label = new Text(String(modifierType - 20), {
+      fontFamily: "Arial",
+      fontSize: this.blockSize * 0.4,
+      fill: 0xffffff,
+      align: "center",
+    });
+    label.anchor.set(0.5);
+    label.name = "modifier-label";
+    sprite.addChild(label);
+  }
+
+  private createFallbackSprite(object: any): Sprite {
+    const sprite = new Sprite(Texture.WHITE);
+    sprite.anchor.set(0.5);
+    sprite.width = this.blockSize;
+    sprite.height = this.blockSize;
+
+    const baseColor = hexToNumber(object.appearance?.color?.base || "#888");
+    sprite.tint = baseColor;
+
+    if (object.isModifier && object.modifierType) {
+      sprite.alpha = 0.7;
+      this.ensureModifierLabel(sprite, object.modifierType);
+    }
+
+    return sprite;
   }
 
   /**
@@ -253,7 +382,11 @@ export class RenderEngine {
    * @param {any} data - Position and transformation data
    * @param {any} options - Additional options
    */
-  setSpriteTransform(sprite: Sprite, data: any, options: { xOffset?: number; yOffset?: number } = {}): void {
+  setSpriteTransform(
+    sprite: Sprite,
+    data: any,
+    options: { xOffset?: number; yOffset?: number } = {}
+  ): void {
     const { xOffset = 0.5, yOffset = 0.5 } = options;
     sprite.x = (data.x + xOffset) * this.blockSize;
     sprite.y = (data.y + yOffset) * this.blockSize;
@@ -307,8 +440,10 @@ export class RenderEngine {
       WIDTH_MULTIPLIER: 5,
       Y_OFFSET: -2.25,
     };
-    this.floorSprite.x = ((window as any).cameraManager.x || 0) - this.pixiApp.screen.width * 2;
-    this.floorSprite.y = this.pixiApp.screen.height + this.blockSize * FLOOR_CONFIG.Y_OFFSET;
+    this.floorSprite.x =
+      ((window as any).cameraManager.x || 0) - this.pixiApp.screen.width * 2;
+    this.floorSprite.y =
+      this.pixiApp.screen.height + this.blockSize * FLOOR_CONFIG.Y_OFFSET;
   }
 
   /**
@@ -355,7 +490,13 @@ export class RenderEngine {
       this.playerSprite = null;
     }
     debug("renderEngine", "Getting player sprite from spriteMap...");
-    this.playerSprite = await getPlayerSprite(this.spriteMap);
+    const spriteMap = this.spriteMap;
+    if (!spriteMap) {
+      error("renderEngine", "Cannot render player: spriteMap not initialized");
+      return;
+    }
+
+    this.playerSprite = await getPlayerSprite(spriteMap);
     if (!this.playerSprite) {
       error("renderEngine", "Failed to get player sprite!");
       return;
@@ -364,11 +505,17 @@ export class RenderEngine {
     this.playerSprite.zIndex = 10000;
     const spriteSize = 30;
     this.playerSprite.scale.set(this.blockSize / spriteSize);
-    this.setSpriteTransform(this.playerSprite, player, { xOffset: 0.5, yOffset: 0.75 });
+    this.setSpriteTransform(this.playerSprite, player, {
+      xOffset: 0.5,
+      yOffset: 0.75,
+    });
     debug("renderEngine", "Adding player sprite to container...");
     this.container.addChild(this.playerSprite);
     debug("renderEngine", "Player sprite rendered successfully");
-    verbose("renderEngine", `Player sprite updated at [${player.x},${player.y}] with scale ${this.playerSprite.scale.x}, rotation ${player.rotation}`);
+    verbose(
+      "renderEngine",
+      `Player sprite updated at [${player.x},${player.y}] with scale ${this.playerSprite.scale.x}, rotation ${player.rotation}`
+    );
   }
 
   /**
@@ -378,7 +525,7 @@ export class RenderEngine {
    */
   startGameLoop(player: any, physics: any): void {
     let lastTime = performance.now();
-    this.tickerCallback = (delta: number) => {
+    this.tickerCallback = (delta: number): void => {
       const currentTime = performance.now();
       const deltaTimeSeconds = (currentTime - lastTime) / 1000;
       lastTime = currentTime;
@@ -387,11 +534,14 @@ export class RenderEngine {
       physics.update();
       this.updatePlayerPosition(player, player.rotation);
       if (!this.isPaused) {
-        updateVisualEffects(this.blockSprites, deltaTimeSeconds, this.effectManager);
+        updateVisualEffects(this.blockSprites, deltaTimeSeconds);
         map(this.blockSprites, (sprite: Sprite) => {
           const effectType = (sprite as any).blockData?.appearance?.effectType;
           if (effectType && effectType !== "none") {
-            const intensity = Number.parseFloat((sprite as any).blockData.appearance.effectIntensity) || 1;
+            const intensity =
+              Number.parseFloat(
+                (sprite as any).blockData.appearance.effectIntensity
+              ) || 1;
             this.particleSystem.emit(sprite, effectType, intensity);
           }
         });
@@ -399,15 +549,27 @@ export class RenderEngine {
       if ((window as any).cameraManager && player) {
         const playerX = player.x * this.blockSize;
         const playerY = player.y * this.blockSize;
-        (window as any).cameraManager.follow({ x: playerX, y: playerY }, 0, -this.pixiApp.canvas.height * 0.2);
+        (window as any).cameraManager.follow(
+          { x: playerX, y: playerY },
+          0,
+          -this.pixiApp.canvas.height * 0.2
+        );
         (window as any).cameraManager.update();
       }
       if (this.isFloorInitialized) {
         this.updateFloorPosition();
-        verbose("renderEngine", "Updated floor position:", this.floorSprite!.x, this.floorSprite!.y);
+        verbose(
+          "renderEngine",
+          "Updated floor position:",
+          this.floorSprite!.x,
+          this.floorSprite!.y
+        );
       }
       if (!this.matrix || !this.blockSprites) {
-        warn("renderEngine", "Cannot update animations: matrix or sprites not initialized");
+        warn(
+          "renderEngine",
+          "Cannot update animations: matrix or sprites not initialized"
+        );
         return;
       }
       try {
@@ -422,11 +584,19 @@ export class RenderEngine {
         this.wasDead = false;
       }
       if (physics.isComplete && !this.isLevelComplete) {
-        debug("renderEngine", "Level complete! Initiating level complete sequence");
+        debug(
+          "renderEngine",
+          "Level complete! Initiating level complete sequence"
+        );
         this.handleLevelComplete();
       }
     };
-    this.pixiApp.ticker.add(this.tickerCallback);
+    if (this.tickerCallback) {
+      this.pixiApp.ticker.add(
+        this.tickerCallback as unknown as TickerCallback<any>,
+        this
+      );
+    }
     debug("renderEngine", "Game loop started");
   }
 
@@ -437,8 +607,17 @@ export class RenderEngine {
    */
   updatePlayerPosition(player: any, rotation?: number): void {
     if (!this.playerSprite) return;
-    this.setSpriteTransform(this.playerSprite, { ...player, rotation }, { xOffset: 0.5, yOffset: 0.75 });
-    verbose("renderEngine", `Player position updated: x=${player.x}, y=${player.y}, visualY=${player.y + 0.75}, rotation=${rotation || player.rotation || 0}`);
+    this.setSpriteTransform(
+      this.playerSprite,
+      { ...player, rotation },
+      { xOffset: 0.5, yOffset: 0.75 }
+    );
+    verbose(
+      "renderEngine",
+      `Player position updated: x=${player.x}, y=${player.y}, visualY=${
+        player.y + 0.75
+      }, rotation=${rotation || player.rotation || 0}`
+    );
   }
 
   /**
@@ -446,7 +625,9 @@ export class RenderEngine {
    */
   stopGameLoop(): void {
     if (this.tickerCallback) {
-      this.pixiApp.ticker.remove(this.tickerCallback);
+      this.pixiApp.ticker.remove(
+        this.tickerCallback as unknown as TickerCallback<any>
+      );
       this.tickerCallback = null;
       debug("renderEngine", "Game loop stopped");
     }
@@ -477,8 +658,10 @@ export class RenderEngine {
     const now = Date.now();
     deltaTime = now - this.lastUpdateTime;
     this.lastUpdateTime = now;
-    if ((window as any).physicsEngine) (window as any).physicsEngine.update(deltaTime);
-    if ((window as any).cameraManager) (window as any).cameraManager.update(deltaTime);
+    if ((window as any).physicsEngine)
+      (window as any).physicsEngine.update(deltaTime);
+    if ((window as any).cameraManager)
+      (window as any).cameraManager.update(deltaTime);
     if (this.isFloorInitialized) this.updateFloorPosition();
     this.effectManager.update(deltaTime);
   }
@@ -545,14 +728,19 @@ export class RenderEngine {
       <button id="menuBtn">Back to Menu</button>
     `;
     document.body.appendChild(levelCompleteElement);
-    (document.getElementById("nextLevelBtn") as HTMLButtonElement).addEventListener("click", () => {
+    (
+      document.getElementById("nextLevelBtn") as HTMLButtonElement
+    ).addEventListener("click", () => {
       const urlParams = new URLSearchParams(window.location.search);
       const currentLevel = Number.parseInt(urlParams.get("level") || "1");
       window.location.href = `?level=${currentLevel + 1}`;
     });
-    (document.getElementById("menuBtn") as HTMLButtonElement).addEventListener("click", () => {
-      window.location.href = "../TDMenu.html";
-    });
+    (document.getElementById("menuBtn") as HTMLButtonElement).addEventListener(
+      "click",
+      () => {
+        window.location.href = "../TDMenu.html";
+      }
+    );
   }
 
   /**
@@ -592,8 +780,12 @@ export class RenderEngine {
       return;
     }
     try {
-      if (this.physics?.isComplete && this.physics?.audioManager === this.audioManager) {
-        const music = this.audioManager.backgroundMusic || this.audioManager.practiceMusic;
+      if (
+        this.physics?.isComplete &&
+        this.physics?.audioManager === this.audioManager
+      ) {
+        const music =
+          this.audioManager.backgroundMusic || this.audioManager.practiceMusic;
         if (music && !music.paused) this.audioManager.fadeOut(music);
       } else {
         this.audioManager.playCompletionSound(false);

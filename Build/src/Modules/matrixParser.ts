@@ -1,234 +1,361 @@
-// Modules/matrixParser.js
-class MatrixParser {
-  // Validation regex and constants
-  static #alphanumericRegex = /^[A-Za-z0-9]{5}$/
-  static #hexColorRegex = /^#[0-9A-Fa-f]{6}$/
-  static #rotationRegex = /^@-?\d+$/
-  static #validCollisionTypes = ["solid", "passthrough", "sticky", "hazard", "trigger"]
-  static #validDistortionTypes = ["wave", "ripple", "twist", "0"]
-  static #validBlendModes = ["normal", "add", "multiply", "screen"]
-  static #validParticleTypes = ["sparkle", "smoke", "0"]
-  static #validSyncTypes = ["beat", "timer", "0"]
-  static #validModifierTypes = [21, 22, 23, 24, 25] // Zoom, Shake, Tilt, Pan, Time Warp
+export type CollisionType =
+  | "solid"
+  | "passthrough"
+  | "sticky"
+  | "hazard"
+  | "trigger";
+export type DistortionType = "wave" | "ripple" | "twist" | "0";
+export type BlendModeType = "normal" | "add" | "multiply" | "screen";
+export type ParticleType = "sparkle" | "smoke" | "0";
+export type SyncType = "beat" | "timer" | "0";
+export type FlipType = "h" | "v" | "hv" | "0";
+export type LockType = "0" | "off" | "unlock";
 
-  // Default values
-  static #defaults = {
-    I: "0",
-    T: null,
-    TR: { rotation: 0, scale: 1.0, flip: "0" },
-    AP: {
-      color: { base: "#888", tint: "0", tintIntensity: 0, shiftRate: 0, pulseColor: "0", pulseRate: 0 },
-      glowColor: "0",
-      glowIntensity: 0,
-      shadowColor: "0",
-      shadowSize: 0,
-      depthOffset: 0,
-      opacity: 1.0,
-      distortionType: "0",
-      distortionIntensity: 0,
-      blendMode: "normal",
-      particleType: "0",
-      particleIntensity: 0,
-    },
-    L: 0,
-    CT: null,
-    G: 0,
-    LK: "0",
-    AN: { pulseRate: 0, pulseAmplitude: 0, syncType: "0" },
+export interface TransformData {
+  rotation: number;
+  scale: number;
+  flip: FlipType;
+}
+
+export interface AppearanceColorData {
+  base: string;
+  tint: string;
+  tintIntensity: number;
+  shiftRate: number;
+  pulseColor: string;
+  pulseRate: number;
+}
+
+export interface AppearanceData {
+  color: AppearanceColorData;
+  glowColor: string;
+  glowIntensity: number;
+  shadowColor: string;
+  shadowSize: number;
+  depthOffset: number;
+  opacity: number;
+  distortionType: DistortionType;
+  distortionIntensity: number;
+  blendMode: BlendModeType;
+  particleType: ParticleType;
+  particleIntensity: number;
+}
+
+export interface AnimationData {
+  pulseRate: number;
+  pulseAmplitude: number;
+  syncType: SyncType;
+}
+
+export interface ParsedTileCell {
+  id: string;
+  type: number;
+  transform: TransformData;
+  appearance: AppearanceData;
+  layer: number;
+  collision: CollisionType;
+  group: number;
+  lock: LockType;
+  animation: AnimationData;
+  isTrigger: boolean;
+  isModifier: boolean;
+}
+
+export type ModifierParamValue = number | string;
+
+export interface ModifierCell {
+  type: "modifier";
+  modifierType: number;
+  params: Record<string, ModifierParamValue>;
+  collision: "passthrough";
+  isModifier: true;
+  isTrigger: false;
+}
+
+export type ParsedCell = ParsedTileCell | ModifierCell;
+export type ParsedMatrix = (ParsedCell | null)[][];
+
+const DEFAULT_COLOR = "#888";
+
+const MODIFIER_TYPES = new Set([21, 22, 23, 24, 25]);
+const TRIGGER_TYPES = new Set([
+  3, 5, 6, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+]);
+
+const VALID_COLLISION_TYPES: readonly CollisionType[] = [
+  "solid",
+  "passthrough",
+  "sticky",
+  "hazard",
+  "trigger",
+];
+const VALID_DISTORTION_TYPES: readonly DistortionType[] = [
+  "wave",
+  "ripple",
+  "twist",
+  "0",
+];
+const VALID_BLEND_MODES: readonly BlendModeType[] = [
+  "normal",
+  "add",
+  "multiply",
+  "screen",
+];
+const VALID_PARTICLE_TYPES: readonly ParticleType[] = ["sparkle", "smoke", "0"];
+const VALID_SYNC_TYPES: readonly SyncType[] = ["beat", "timer", "0"];
+const VALID_FLIP_TYPES: readonly FlipType[] = ["h", "v", "hv", "0"];
+const VALID_LOCK_TYPES: readonly LockType[] = ["0", "off", "unlock"];
+
+const ALPHANUMERIC_REGEX = /^[A-Za-z0-9]{5}$/;
+const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
+const ROTATION_REGEX = /^@-?\d+$/;
+const NUMERIC_REGEX = /^\d+$/;
+const FLOAT_REGEX = /^\d*\.?\d+$/;
+
+const DEFAULT_TRANSFORM: TransformData = { rotation: 0, scale: 1, flip: "0" };
+const DEFAULT_COLOR_DATA: AppearanceColorData = {
+  base: DEFAULT_COLOR,
+  tint: "0",
+  tintIntensity: 0,
+  shiftRate: 0,
+  pulseColor: "0",
+  pulseRate: 0,
+};
+const DEFAULT_ANIMATION: AnimationData = {
+  pulseRate: 0,
+  pulseAmplitude: 0,
+  syncType: "0",
+};
+
+const createDefaultAppearance = (): AppearanceData => ({
+  color: { ...DEFAULT_COLOR_DATA },
+  glowColor: DEFAULT_COLOR,
+  glowIntensity: 0,
+  shadowColor: DEFAULT_COLOR,
+  shadowSize: 0,
+  depthOffset: 0,
+  opacity: 1,
+  distortionType: "0",
+  distortionIntensity: 0,
+  blendMode: "normal",
+  particleType: "0",
+  particleIntensity: 0,
+});
+
+const createDefaultTileCell = (type: number): ParsedTileCell => ({
+  id: "0",
+  type,
+  transform: { ...DEFAULT_TRANSFORM },
+  appearance: createDefaultAppearance(),
+  layer: 0,
+  collision: "solid",
+  group: 0,
+  lock: "0",
+  animation: { ...DEFAULT_ANIMATION },
+  isTrigger: false,
+  isModifier: false,
+});
+
+const validateFloat = (value: string, context: string): number => {
+  if (value === "0") {
+    return 0;
   }
+  if (!FLOAT_REGEX.test(value)) {
+    throw new Error(`Invalid ${context}: ${value}`);
+  }
+  return Number.parseFloat(value);
+};
 
-  // Parse the entire matrix
-  static parse(matrix) {
+const validateHexColor = (value: string, context: string): string => {
+  if (value === "0") {
+    return DEFAULT_COLOR;
+  }
+  if (!HEX_COLOR_REGEX.test(value)) {
+    throw new Error(`Invalid ${context}: ${value}`);
+  }
+  return value;
+};
+
+export class MatrixParser {
+  static parse(matrix: unknown): ParsedMatrix {
     if (!Array.isArray(matrix)) {
-      throw new Error("Matrix must be an array")
+      throw new Error("Matrix must be an array");
     }
-    const parsedMatrix = matrix.map((row, rowIndex) => {
+
+    return matrix.map((row, rowIndex) => {
       if (!Array.isArray(row)) {
-        throw new Error(`Row ${rowIndex} must be an array`)
+        throw new Error(`Row ${rowIndex} must be an array`);
       }
+
       return row.map((cell, colIndex) => {
         try {
-          return this.#parseCell(cell)
-        } catch (error) {
-          throw new Error(`Error in cell [${rowIndex},${colIndex}]: ${error.message}`)
+          return MatrixParser.parseCell(cell);
+        } catch (exception) {
+          const errorMessage =
+            exception instanceof Error ? exception.message : String(exception);
+          throw new Error(
+            `Error in cell [${rowIndex},${colIndex}]: ${errorMessage}`
+          );
         }
-      })
-    })
-    return parsedMatrix
+      });
+    });
   }
 
-  // Parse a single cell
-  static #parseCell(cell) {
+  private static parseCell(cell: unknown): ParsedCell | null {
     if (cell === 0 || cell === "0") {
-      return null
+      return null;
     }
 
-    // Handle modifier syntax: M:21[param1=value1|param2=value2]
     if (typeof cell === "string" && cell.startsWith("M:")) {
-      return this.#parseModifier(cell)
+      return MatrixParser.parseModifier(cell);
     }
 
-    if (typeof cell === "number" || (typeof cell === "string" && /^\d+$/.test(cell))) {
-      cell = `T:${cell}`
-      console.log("legacy numeric cell converted:", { cell })
+    let normalizedCell = cell;
+    if (typeof cell === "number") {
+      normalizedCell = `T:${cell}`;
     }
 
-    if (typeof cell !== "string") {
-      throw new Error(`Cell must be a string or number, got: ${typeof cell}`)
+    if (typeof normalizedCell !== "string") {
+      throw new Error(
+        `Cell must be a string or number, got: ${typeof normalizedCell}`
+      );
     }
 
-    const parts = cell.includes("/") ? cell.split("/") : [cell]
-    const properties = parts.reduce((acc, prop) => {
-      const firstColonIndex = prop.indexOf(":")
-      if (firstColonIndex === -1) {
-        throw new Error(`Invalid property format: ${prop}`)
-      }
-      const key = prop.slice(0, firstColonIndex)
-      const value = prop.slice(firstColonIndex + 1)
-      if (!key || !value) {
-        throw new Error(`Invalid property format: ${prop}`)
-      }
-      acc[key] = value
-      return acc
-    }, {})
-
-    if (!properties.T) {
-      throw new Error("Missing required T: property")
-    }
-    if (!/^\d+$/.test(properties.T)) {
-      throw new Error(`Invalid T: value: ${properties.T}`)
+    if (NUMERIC_REGEX.test(normalizedCell)) {
+      normalizedCell = `T:${normalizedCell}`;
     }
 
-    const result = {
-      id: this.#defaults.I,
-      type: Number.parseInt(properties.T, 10),
-      transform: { ...this.#defaults.TR },
-      appearance: { ...this.#defaults.AP, color: { ...this.#defaults.AP.color } },
-      layer: this.#defaults.L,
-      collision: this.#defaults.CT,
-      group: this.#defaults.G,
-      lock: this.#defaults.LK,
-      animation: { ...this.#defaults.AN },
+    const properties = MatrixParser.parseProperties(normalizedCell as string);
+
+    const typeValue = properties.get("T");
+    if (!typeValue) {
+      throw new Error("Missing required T: property");
+    }
+    if (!NUMERIC_REGEX.test(typeValue)) {
+      throw new Error(`Invalid T: value: ${typeValue}`);
     }
 
-    // Default collision based on type
-    if (this.#validModifierTypes.includes(result.type)) {
-      result.collision = "passthrough"
-      result.isModifier = true
-      result.isTrigger = false
-    } else if ([3, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 5, 6].includes(result.type)) {
-      result.collision = "trigger"
-      result.isTrigger = true
-      result.isModifier = false
-    } else if (result.type === 2) {
-      result.collision = "hazard"
-      result.isTrigger = false
-      result.isModifier = false
-    } else {
-      result.collision = "solid"
-      result.isTrigger = false
-      result.isModifier = false
-    }
+    const typeNumber = Number.parseInt(typeValue, 10);
+    const result = createDefaultTileCell(typeNumber);
 
-    for (const [key, value] of Object.entries(properties)) {
+    MatrixParser.applyDefaultCollision(result);
+
+    for (const [key, value] of properties.entries()) {
       switch (key) {
         case "I":
-          if (!this.#alphanumericRegex.test(value)) {
-            throw new Error(`Invalid I: value: ${value}`)
-          }
-          result.id = value
-          break
+          MatrixParser.applyIdentifier(result, value);
+          break;
         case "T":
-          break
+          break;
         case "TR":
-          result.transform = this.#parseTransform(value)
-          break
+          result.transform = MatrixParser.parseTransform(value);
+          break;
         case "AP":
-          result.appearance = this.#parseAppearance(value)
-          break
+          result.appearance = MatrixParser.parseAppearance(value);
+          break;
         case "L":
-          if (!/^\d+$/.test(value)) {
-            throw new Error(`Invalid L: value: ${value}`)
-          }
-          result.layer = Number.parseInt(value, 10)
-          break
+          result.layer = MatrixParser.parseInteger(value, "L");
+          break;
         case "CT":
-          if (!this.#validCollisionTypes.includes(value)) {
-            throw new Error(`Invalid CT: value: ${value}`)
-          }
-          result.collision = value
-          break
+          MatrixParser.applyCollision(result, value);
+          break;
         case "G":
-          if (!/^\d+$/.test(value)) {
-            new Error(`Invalid G: value: ${value}`)
-          }
-          result.group = Number.parseInt(value, 10)
-          break
+          result.group = MatrixParser.parseInteger(value, "G");
+          break;
         case "LK":
-          if (value !== "off" && value !== "0" && value !== "unlock") {
-            throw new Error(`Invalid LK: value: ${value}`)
-          }
-          if ((value === "off" || value === "unlock") && result.group === 0) {
-            throw new Error("LK:off and LK:unlock require a non-zero G: value")
-          }
-          result.lock = value
-          break
+          MatrixParser.applyLock(result, value);
+          break;
         case "AN":
-          result.animation = this.#parseAnimation(value)
-          break
+          result.animation = MatrixParser.parseAnimation(value);
+          break;
         default:
-          throw new Error(`Unknown property: ${key}`)
+          throw new Error(`Unknown property: ${key}`);
       }
     }
 
-    return result
+    return result;
   }
 
-  static #parseTransform(value) {
-    if (!value.startsWith("[") || !value.endsWith("]")) {
-      throw new Error(`Invalid TR: format: ${value}`)
-    }
-    const parts = value.slice(1, -1).split("|")
-    if (parts.length !== 3) {
-      throw new Error(`TR: must have 3 parts: ${value}`)
-    }
-    const [rotation, scale, flip] = parts
+  private static parseProperties(cell: string): Map<string, string> {
+    const segments = cell.includes("/") ? cell.split("/") : [cell];
+    const properties = new Map<string, string>();
 
-    if (!this.#rotationRegex.test(rotation)) {
-      throw new Error(`Invalid TR rotation: ${rotation}`)
+    for (const segment of segments) {
+      const firstColonIndex = segment.indexOf(":");
+      if (firstColonIndex === -1) {
+        throw new Error(`Invalid property format: ${segment}`);
+      }
+
+      const key = segment.slice(0, firstColonIndex);
+      const value = segment.slice(firstColonIndex + 1);
+
+      if (!key || !value) {
+        throw new Error(`Invalid property format: ${segment}`);
+      }
+
+      properties.set(key, value);
     }
-    if (!/^\d*\.?\d+$/.test(scale)) {
-      throw new Error(`Invalid TR scale: ${scale}`)
+
+    return properties;
+  }
+
+  private static applyIdentifier(result: ParsedTileCell, value: string): void {
+    if (!ALPHANUMERIC_REGEX.test(value)) {
+      throw new Error(`Invalid I: value: ${value}`);
     }
-    if (!["h", "v", "hv", "0"].includes(flip)) {
-      throw new Error(`Invalid TR flip: ${flip}`)
+    result.id = value;
+  }
+
+  private static parseTransform(value: string): TransformData {
+    if (!value.startsWith("[") || !value.endsWith("]")) {
+      throw new Error(`Invalid TR: format: ${value}`);
+    }
+
+    const [rotation, scale, flip] = value.slice(1, -1).split("|");
+    if (rotation === undefined || scale === undefined || flip === undefined) {
+      throw new Error(`TR: must have 3 parts: ${value}`);
+    }
+
+    if (!ROTATION_REGEX.test(rotation)) {
+      throw new Error(`Invalid TR rotation: ${rotation}`);
+    }
+
+    if (!FLOAT_REGEX.test(scale)) {
+      throw new Error(`Invalid TR scale: ${scale}`);
+    }
+
+    if (!VALID_FLIP_TYPES.includes(flip as FlipType)) {
+      throw new Error(`Invalid TR flip: ${flip}`);
     }
 
     return {
       rotation: Number.parseInt(rotation.slice(1), 10),
       scale: Number.parseFloat(scale),
-      flip,
-    }
+      flip: flip as FlipType,
+    };
   }
 
-  static #parseAppearance(value) {
+  private static parseAppearance(value: string): AppearanceData {
     if (!value.startsWith("[") || !value.endsWith("]")) {
-      throw new Error(`Invalid AP: format: ${value}`)
+      throw new Error(`Invalid AP: format: ${value}`);
     }
 
-    const colorMatch = value.match(/C:\[[^\]]+\]/)
+    const colorMatch = value.match(/C:\[[^\]]+\]/);
     if (!colorMatch) {
-      throw new Error(`Invalid AP color format: ${value}`)
+      throw new Error(`Invalid AP color format: ${value}`);
     }
-    const colorStr = colorMatch[0]
 
-    const remaining = value
+    const colorString = colorMatch[0];
+    const otherSegments = value
       .slice(1, -1)
-      .replace(colorStr, "")
-      .replace(/^\|+|\|+$/g, "")
-    const otherParts = remaining ? remaining.split("|") : []
+      .replace(colorString, "")
+      .replace(/^[|]+|[|]+$/g, "");
+    const otherValues = otherSegments ? otherSegments.split("|") : [];
 
-    const paddedParts = otherParts.concat(Array(16 - otherParts.length).fill("0"))
+    const paddedValues = otherValues.concat(
+      Array(Math.max(0, 11 - otherValues.length)).fill("0")
+    );
+
     const [
       glowColor,
       glowIntensity,
@@ -241,181 +368,253 @@ class MatrixParser {
       blendMode = "normal",
       particleType,
       particleIntensity,
-    ] = paddedParts
+    ] = paddedValues as [
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string
+    ];
 
-    if (!colorStr.startsWith("C:[") || !colorStr.endsWith("]")) {
-      throw new Error(`Invalid AP color format: ${colorStr}`)
-    }
-    const colorParts = colorStr.slice(3, -1).split("|")
+    const colorParts = colorString.slice(3, -1).split("|");
     if (colorParts.length !== 6) {
-      throw new Error(`AP color must have 6 parts: ${colorStr}`)
-    }
-    const [base, tint, tintIntensity, shiftRate, pulseColor, pulseRate] = colorParts
-
-    if (base !== "0" && !this.#hexColorRegex.test(base)) {
-      throw new Error(`Invalid AP color base: ${base}`)
-    }
-    if (tint !== "0" && !this.#hexColorRegex.test(tint)) {
-      throw new Error(`Invalid AP color tint: ${tint}`)
-    }
-    if (tintIntensity !== "0" && !/^\d*\.?\d+$/.test(tintIntensity)) {
-      throw new Error(`Invalid AP tint intensity: ${tintIntensity}`)
-    }
-    if (shiftRate !== "0" && !/^\d*\.?\d+$/.test(shiftRate)) {
-      throw new Error(`Invalid AP color shift rate: ${shiftRate}`)
-    }
-    if (pulseColor !== "0" && !this.#hexColorRegex.test(pulseColor)) {
-      throw new Error(`Invalid AP pulse color: ${pulseColor}`)
-    }
-    if (pulseRate !== "0" && !/^\d*\.?\d+$/.test(pulseRate)) {
-      throw new Error(`Invalid AP pulse rate: ${pulseRate}`)
-    }
-    if (glowColor !== "0" && !this.#hexColorRegex.test(glowColor)) {
-      throw new Error(`Invalid AP glow color: ${glowColor}`)
-    }
-    if (glowIntensity !== "0" && !/^\d*\.?\d+$/.test(glowIntensity)) {
-      throw new Error(`Invalid AP glow intensity: ${glowIntensity}`)
-    }
-    if (shadowColor !== "0" && !this.#hexColorRegex.test(shadowColor)) {
-      throw new Error(`Invalid AP shadow color: ${shadowColor}`)
-    }
-    if (shadowSize !== "0" && !/^\d*\.?\d+$/.test(shadowSize)) {
-      throw new Error(`Invalid AP shadow size: ${shadowSize}`)
-    }
-    if (depthOffset !== "0" && !/^\d*\.?\d+$/.test(depthOffset)) {
-      throw new Error(`Invalid AP depth offset: ${depthOffset}`)
-    }
-    if (opacity !== "0" && !/^\d*\.?\d+$/.test(opacity)) {
-      throw new Error(`Invalid AP opacity: ${opacity}`)
-    }
-    if (!this.#validDistortionTypes.includes(distortionType)) {
-      throw new Error(`Invalid AP distortion type: ${distortionType}`)
-    }
-    if (distortionIntensity !== "0" && !/^\d*\.?\d+$/.test(distortionIntensity)) {
-      throw new Error(`Invalid AP distortion intensity: ${distortionIntensity}`)
-    }
-    if (!this.#validBlendModes.includes(blendMode)) {
-      throw new Error(`Invalid AP blend mode: ${blendMode}`)
-    }
-    if (!this.#validParticleTypes.includes(particleType)) {
-      throw new Error(`Invalid AP particle type: ${particleType}`)
-    }
-    if (particleIntensity !== "0" && !/^\d*\.?\d+$/.test(particleIntensity)) {
-      throw new Error(`Invalid AP particle intensity: ${particleIntensity}`)
+      throw new Error(`AP color must have 6 parts: ${colorString}`);
     }
 
-    const parsedGlowIntensity = Number.parseFloat(glowIntensity) || 0
-    const parsedShadowSize = Number.parseFloat(shadowSize) || 0
-    const parsedDistortionIntensity = Number.parseFloat(distortionIntensity) || 0
-    const parsedParticleIntensity = Number.parseFloat(particleIntensity) || 0
+    const [base, tint, tintIntensity, shiftRate, pulseColor, pulseRate] =
+      colorParts;
 
-    if (parsedGlowIntensity < 0) {
-      throw new Error(`AP glow intensity must be non-negative: ${glowIntensity}`)
-    }
-    if (parsedShadowSize < 0) {
-      throw new Error(`AP shadow size must be non-negative: ${shadowSize}`)
-    }
-    if (parsedDistortionIntensity < 0) {
-      throw new Error(`AP distortion intensity must be non-negative: ${distortionIntensity}`)
-    }
-    if (parsedParticleIntensity < 0) {
-      throw new Error(`AP particle intensity must be non-negative: ${particleIntensity}`)
-    }
-
-    return {
+    const appearance: AppearanceData = {
       color: {
-        base: base === "0" ? "#888" : base,
-        tint: tint,
-        tintIntensity: Number.parseFloat(tintIntensity) || 0,
-        shiftRate: Number.parseFloat(shiftRate) || 0,
-        pulseColor: pulseColor,
-        pulseRate: Number.parseFloat(pulseRate) || 0,
+        base: validateHexColor(base, "AP color base"),
+        tint: tint === "0" ? "0" : validateHexColor(tint, "AP color tint"),
+        tintIntensity: validateFloat(tintIntensity, "AP tint intensity"),
+        shiftRate: validateFloat(shiftRate, "AP color shift rate"),
+        pulseColor:
+          pulseColor === "0"
+            ? "0"
+            : validateHexColor(pulseColor, "AP pulse color"),
+        pulseRate: validateFloat(pulseRate, "AP pulse rate"),
       },
-      glowColor: glowColor === "0" ? "#888" : glowColor,
-      glowIntensity: parsedGlowIntensity,
-      shadowColor: shadowColor === "0" ? "#888" : shadowColor,
-      shadowSize: parsedShadowSize,
-      depthOffset: Number.parseFloat(depthOffset) || 0,
-      opacity: Number.parseFloat(opacity) || 1.0,
-      distortionType: distortionType,
-      distortionIntensity: parsedDistortionIntensity,
-      blendMode: blendMode,
-      particleType: particleType,
-      particleIntensity: parsedParticleIntensity,
-    }
+      glowColor: validateHexColor(glowColor, "AP glow color"),
+      glowIntensity: validateFloat(glowIntensity, "AP glow intensity"),
+      shadowColor: validateHexColor(shadowColor, "AP shadow color"),
+      shadowSize: validateFloat(shadowSize, "AP shadow size"),
+      depthOffset: validateFloat(depthOffset, "AP depth offset"),
+      opacity: validateFloat(opacity, "AP opacity"),
+      distortionType: MatrixParser.parseEnumValue(
+        distortionType,
+        VALID_DISTORTION_TYPES,
+        "AP distortion type"
+      ),
+      distortionIntensity: validateFloat(
+        distortionIntensity,
+        "AP distortion intensity"
+      ),
+      blendMode: MatrixParser.parseEnumValue(
+        blendMode,
+        VALID_BLEND_MODES,
+        "AP blend mode"
+      ),
+      particleType: MatrixParser.parseEnumValue(
+        particleType,
+        VALID_PARTICLE_TYPES,
+        "AP particle type"
+      ),
+      particleIntensity: validateFloat(
+        particleIntensity,
+        "AP particle intensity"
+      ),
+    };
+
+    MatrixParser.ensureNonNegative(
+      appearance.glowIntensity,
+      "AP glow intensity"
+    );
+    MatrixParser.ensureNonNegative(appearance.shadowSize, "AP shadow size");
+    MatrixParser.ensureNonNegative(
+      appearance.distortionIntensity,
+      "AP distortion intensity"
+    );
+    MatrixParser.ensureNonNegative(
+      appearance.particleIntensity,
+      "AP particle intensity"
+    );
+
+    return appearance;
   }
 
-  static #parseAnimation(value) {
+  private static parseAnimation(value: string): AnimationData {
     if (!value.startsWith("[") || !value.endsWith("]")) {
-      throw new Error(`Invalid AN: format: ${value}`)
+      throw new Error(`Invalid AN: format: ${value}`);
     }
-    const parts = value.slice(1, -1).split("|")
+
+    const parts = value.slice(1, -1).split("|");
     if (parts.length !== 3) {
-      throw new Error(`AN: must have 3 parts: ${value}`)
-    }
-    const [pulseRate, pulseAmplitude, syncType] = parts
-
-    if (pulseRate !== "0" && !/^\d*\.?\d+$/.test(pulseRate)) {
-      throw new Error(`Invalid AN pulse rate: ${pulseRate}`)
-    }
-    if (pulseAmplitude !== "0" && !/^\d*\.?\d+$/.test(pulseAmplitude)) {
-      throw new Error(`Invalid AN pulse amplitude: ${pulseAmplitude}`)
-    }
-    if (!this.#validSyncTypes.includes(syncType)) {
-      throw new Error(`Invalid AN sync type: ${syncType}`)
+      throw new Error(`AN: must have 3 parts: ${value}`);
     }
 
-    return {
-      pulseRate: Number.parseFloat(pulseRate) || 0,
-      pulseAmplitude: Number.parseFloat(pulseAmplitude) || 0,
-      syncType,
-    }
+    const [pulseRate, pulseAmplitude, syncType] = parts;
+
+    const animation: AnimationData = {
+      pulseRate: validateFloat(pulseRate, "AN pulse rate"),
+      pulseAmplitude: validateFloat(pulseAmplitude, "AN pulse amplitude"),
+      syncType: MatrixParser.parseEnumValue(
+        syncType,
+        VALID_SYNC_TYPES,
+        "AN sync type"
+      ),
+    };
+
+    MatrixParser.ensureNonNegative(animation.pulseRate, "AN pulse rate");
+    MatrixParser.ensureNonNegative(
+      animation.pulseAmplitude,
+      "AN pulse amplitude"
+    );
+
+    return animation;
   }
 
-  static #parseModifier(cell) {
-    // Match M:type[params]
-    const match = cell.match(/^M:(\d+)\[(.*?)\]$/)
+  private static parseModifier(cell: string): ModifierCell {
+    const match = cell.match(/^M:(\d+)\[(.*?)\]$/);
     if (!match) {
-      throw new Error(`Invalid modifier format: ${cell}`)
+      throw new Error(`Invalid modifier format: ${cell}`);
     }
 
-    const type = Number.parseInt(match[1], 10)
-    if (!this.#validModifierTypes.includes(type)) {
-      throw new Error(`Invalid modifier type: ${type}. Must be one of: ${this.#validModifierTypes.join(", ")}`)
+    const modifierType = Number.parseInt(match[1], 10);
+    if (!MODIFIER_TYPES.has(modifierType)) {
+      throw new Error(
+        `Invalid modifier type: ${modifierType}. Must be one of: ${Array.from(
+          MODIFIER_TYPES
+        ).join(", ")}`
+      );
     }
 
-    const paramString = match[2]
-    const params = {}
+    const paramString = match[2];
+    const params: Record<string, ModifierParamValue> = {};
 
-    // Parse parameters
-    paramString.split("|").forEach((param) => {
-      const [key, value] = param.split("=")
-      if (key && value !== undefined) {
-        // Convert to number if possible
-        params[key] = isNaN(value) ? value : Number.parseFloat(value)
+    if (paramString.trim()) {
+      const paramEntries = paramString.split("|");
+      for (const entry of paramEntries) {
+        const [rawKey, rawValue] = entry.split("=");
+        if (!rawKey || rawValue === undefined) {
+          throw new Error(`Invalid modifier parameter: ${entry}`);
+        }
+
+        const key = rawKey.trim();
+        const value = rawValue.trim();
+        const numeric = Number.parseFloat(value);
+        params[key] = Number.isFinite(numeric) ? numeric : value;
       }
-    })
+    }
 
-    // Set up the modifier object
     return {
       type: "modifier",
-      modifierType: type,
+      modifierType,
       params,
-      collision: "passthrough", // Changed from 'trigger'
-      isModifier: true, // New flag
-      isTrigger: false, // Explicitly not a trigger
+      collision: "passthrough",
+      isModifier: true,
+      isTrigger: false,
+    };
+  }
+
+  private static parseInteger(value: string, context: string): number {
+    if (!NUMERIC_REGEX.test(value)) {
+      throw new Error(`Invalid ${context}: value: ${value}`);
+    }
+    return Number.parseInt(value, 10);
+  }
+
+  private static applyDefaultCollision(cell: ParsedTileCell): void {
+    if (MODIFIER_TYPES.has(cell.type)) {
+      cell.collision = "passthrough";
+      cell.isModifier = true;
+      cell.isTrigger = false;
+      return;
+    }
+
+    if (TRIGGER_TYPES.has(cell.type)) {
+      cell.collision = "trigger";
+      cell.isTrigger = true;
+      cell.isModifier = false;
+      return;
+    }
+
+    if (cell.type === 2) {
+      cell.collision = "hazard";
+      cell.isTrigger = false;
+      cell.isModifier = false;
+      return;
+    }
+
+    cell.collision = "solid";
+    cell.isTrigger = false;
+    cell.isModifier = false;
+  }
+
+  private static applyCollision(cell: ParsedTileCell, value: string): void {
+    if (!VALID_COLLISION_TYPES.includes(value as CollisionType)) {
+      throw new Error(`Invalid CT: value: ${value}`);
+    }
+
+    cell.collision = value as CollisionType;
+    cell.isTrigger = value === "trigger";
+    cell.isModifier = MODIFIER_TYPES.has(cell.type);
+  }
+
+  private static applyLock(cell: ParsedTileCell, value: string): void {
+    if (!VALID_LOCK_TYPES.includes(value as LockType)) {
+      throw new Error(`Invalid LK: value: ${value}`);
+    }
+
+    const lockValue = value as LockType;
+    if ((lockValue === "off" || lockValue === "unlock") && cell.group === 0) {
+      throw new Error("LK:off and LK:unlock require a non-zero G: value");
+    }
+
+    cell.lock = lockValue;
+  }
+
+  private static parseEnumValue<T extends string>(
+    value: string,
+    validValues: readonly T[],
+    context: string
+  ): T {
+    if (!validValues.includes(value as T)) {
+      throw new Error(`Invalid ${context}: ${value}`);
+    }
+    return value as T;
+  }
+
+  private static ensureNonNegative(value: number, context: string): void {
+    if (value < 0) {
+      throw new Error(`${context} must be non-negative: ${value}`);
     }
   }
 
-  static shouldSkipRendering(cell, isEditor = false) {
-    if (isEditor) return false
-    return cell?.isTrigger || cell?.isModifier
+  static shouldSkipRendering(
+    cell: ParsedCell | null | undefined,
+    isEditor = false
+  ): boolean {
+    if (isEditor) {
+      return false;
+    }
+    return Boolean(cell?.isTrigger || cell?.isModifier);
   }
 
-  static shouldSkipCollision(cell, isEditor = false) {
-    if (isEditor) return false
-    return cell?.isTrigger || cell?.collision === "passthrough"
+  static shouldSkipCollision(
+    cell: ParsedCell | null | undefined,
+    isEditor = false
+  ): boolean {
+    if (isEditor) {
+      return false;
+    }
+    return Boolean(cell?.isTrigger || cell?.collision === "passthrough");
   }
 }
-
-export { MatrixParser }

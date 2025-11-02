@@ -1,316 +1,330 @@
-import localforage from 'localforage'
-import { warn, error, debug, verbose } from './logManager.js'
+import localforage from "localforage";
+import { warn, error, debug, verbose } from "./logManager";
 
-// Configure database instances
-const gameDB = localforage.createInstance({
-  name: 'TeleporterDashDB',
-  storeName: 'gameData',
-  description: 'Main game data storage'
-})
+type StoreName = "game" | "editor" | "scores";
 
-const editorDB = localforage.createInstance({
-  name: 'LevelEditorDB',
-  storeName: 'editorData',
-  description: 'Level editor data storage'
-})
+type Serializable =
+  | string
+  | number
+  | boolean
+  | null
+  | Serializable[]
+  | SerializableObject;
 
-const scoresDB = localforage.createInstance({
-  name: 'TeleporterDashDB',
-  storeName: 'scores',
-  description: 'Level scores storage'
-})
+interface SerializableObject {
+  [key: string]: Serializable;
+}
 
-class StorageManager {
-  // GitHub API constants
-  GITHUB_API_BASE: string = 'https://api.github.com/repos/NellowTCS/TeleporterDashLevels/contents';
-  GITHUB_RAW_BASE: string = 'https://raw.githubusercontent.com/NellowTCS/TeleporterDashLevels/main';
+interface StoredLevelSummary extends SerializableObject {
+  levelId: string;
+  time: number;
+  jumps: number;
+  deaths: number;
+  timestamp: number;
+}
 
-  // Storage keys
-  SETTINGS_KEY: string = 'gameSettings';
-  LEVELS_REGISTRY_KEY: string = 'userLevelsRegistry';
-  NEXT_LEVEL_ID_KEY: string = 'nextLevelId';
-  TEST_LEVEL_KEY: string = 'testLevel';
+interface StoredScore extends SerializableObject {
+  levelId: string;
+  time: number;
+  jumps: number;
+  deaths: number;
+  timestamp: number;
+}
+
+interface DownloadedLevel extends SerializableObject {
+  filename: string;
+  dateDownloaded: string;
+  originalCode: string;
+}
+
+type StoreInstance = ReturnType<typeof localforage.createInstance>;
+type StoreRecord = Readonly<Record<StoreName, StoreInstance>>;
+
+const stores: StoreRecord = {
+  game: localforage.createInstance({
+    name: "TeleporterDashDB",
+    storeName: "gameData",
+    description: "Main game data storage",
+  }),
+  editor: localforage.createInstance({
+    name: "LevelEditorDB",
+    storeName: "editorData",
+    description: "Level editor data storage",
+  }),
+  scores: localforage.createInstance({
+    name: "TeleporterDashDB",
+    storeName: "scores",
+    description: "Level scores storage",
+  }),
+};
+
+const isSerializable = (value: unknown): value is Serializable => {
+  if (value === null) return true;
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(isSerializable);
+  }
+  if (typeof value === "object") {
+    return Object.values(value as SerializableObject).every(isSerializable);
+  }
+  return false;
+};
+
+export class StorageManager {
+  readonly GITHUB_API_BASE =
+    "https://api.github.com/repos/NellowTCS/TeleporterDashLevels/contents";
+  readonly GITHUB_RAW_BASE =
+    "https://raw.githubusercontent.com/NellowTCS/TeleporterDashLevels/main";
+
+  readonly SETTINGS_KEY = "gameSettings";
+  readonly LEVELS_REGISTRY_KEY = "userLevelsRegistry";
+  readonly NEXT_LEVEL_ID_KEY = "nextLevelId";
+  readonly TEST_LEVEL_KEY = "testLevel";
 
   constructor() {
-    // Initialize (localforage handles this automatically, but keeping for compatibility)
-    this.initialize();
+    void this.initialize();
   }
 
-  // Initialize (localforage handles this automatically, but keeping for compatibility)
-  async initialize(options = {}) {
-    try {
-      debug('storageManager', 'StorageManager initialized with localforage')
-      return true
-    } catch (err) {
-      error('storageManager', 'Error initializing storage:', err)
-      throw err
+  async initialize(): Promise<void> {
+    debug("storageManager", "StorageManager initialized with localforage");
+  }
+
+  async saveToStore<T extends Serializable>(
+    storeName: StoreName,
+    key: string,
+    data: T
+  ): Promise<void> {
+    if (!isSerializable(data)) {
+      throw new TypeError("Attempted to persist non-serializable data");
     }
-  };
 
-  // Generic storage methods
-  async saveToStore(storeName: string, key: string, data: { levelId: any; time: any; jumps: any; deaths: any; timestamp: number }) {
-    try {
-      debug('storageManager', `Saving data to ${storeName} with key ${key}`)
-      const db = this.getDB(storeName)
-      await db.setItem(key, data)
-      debug('storageManager', `Data saved successfully to ${storeName}`)
-      return true
-    } catch (err) {
-      error('storageManager', `Error saving to ${storeName}:`, err)
-      throw err
+    debug("storageManager", `Saving data to ${storeName} with key ${key}`);
+    await stores[storeName].setItem(key, data);
+    debug("storageManager", `Data saved successfully to ${storeName}`);
+  }
+
+  async getFromStore<T extends Serializable>(
+    storeName: StoreName,
+    key: string
+  ): Promise<T | null> {
+    verbose("storageManager", `Getting data from ${storeName} with key ${key}`);
+    const result = (await stores[storeName].getItem<T>(key)) ?? null;
+    if (result !== null) {
+      verbose(
+        "storageManager",
+        `Data retrieved successfully from ${storeName}`
+      );
+    } else {
+      verbose("storageManager", `No data found in ${storeName} for key ${key}`);
     }
-  };
+    return result;
+  }
 
-  async getFromStore(storeName: string, key: string) {
-    try {
-      verbose('storageManager', `Getting data from ${storeName} with key ${key}`)
-      const db = this.getDB(storeName)
-      const result = await db.getItem(key)
-      if (result !== null) {
-        verbose('storageManager', `Data retrieved successfully from ${storeName}`)
-      } else {
-        verbose('storageManager', `No data found in ${storeName} for key ${key}`)
-      }
-      return result
-    } catch (err) {
-      error('storageManager', `Error getting from ${storeName}:`, err)
-      throw err
-    }
-  };
+  async deleteFromStore(storeName: StoreName, key: string): Promise<void> {
+    debug("storageManager", `Deleting data from ${storeName} with key ${key}`);
+    await stores[storeName].removeItem(key);
+    debug("storageManager", `Data deleted successfully from ${storeName}`);
+  }
 
-  async deleteFromStore(storeName: string, key: string) {
-    try {
-      debug('storageManager', `Deleting data from ${storeName} with key ${key}`)
-      const db = this.getDB(storeName)
-      await db.removeItem(key)
-      debug('storageManager', `Data deleted successfully from ${storeName}`)
-      return true
-    } catch (err) {
-      error('storageManager', `Error deleting from ${storeName}:`, err)
-      throw err
-    }
-  };
+  async getAllFromStore<T extends Serializable>(
+    storeName: StoreName
+  ): Promise<T[]> {
+    debug("storageManager", `Getting all data from ${storeName}`);
+    const db = stores[storeName];
+    const keys = await db.keys();
+    const items: T[] = [];
 
-  async getAllFromStore(storeName: string) {
-    try {
-      debug('storageManager', `Getting all data from ${storeName}`)
-      const db = this.getDB(storeName)
-      const keys = await db.keys()
-      const items: { [key: string]: IDBDatabase | null } = {};
-
-      for (const key of keys) {
-        if (key === null) warn('storageManager', `Null key, ${key}, found in ${storeName}.`);
-        items[key] = await db.getItem(key);
+    for (const key of keys) {
+      if (!key) {
+        warn("storageManager", `Null or empty key found in ${storeName}`);
+        continue;
       }
 
-      debug('storageManager', `All data retrieved successfully from ${storeName}`)
-      return Object.values(items)
-    } catch (err) {
-      error('storageManager', `Error getting all from ${storeName}:`, err)
-      throw err
-    }
-  };
-
-  async clearStore(storeName: string) {
-    try {
-      debug('storageManager', `Clearing all data from ${storeName}`)
-      const db = this.getDB(storeName)
-      await db.clear()
-      debug('storageManager', `Store ${storeName} cleared successfully`)
-      return true
-    } catch (err) {
-      error('storageManager', `Error clearing ${storeName}:`, err)
-      throw err
-    }
-  };
-
-  // Helper to get the right database instance
-  getDB(storeName: any) {
-    switch (storeName) {
-      case 'scores':
-        return scoresDB
-      case 'editor':
-        return editorDB
-      case 'game':
-      default:
-        return gameDB
-    }
-  };
-
-  // LocalStorage methods (keeping for compatibility)
-  saveToLocalStorage(key: string, data: any) {
-    try {
-      debug('storageManager', `Saving data to localStorage with key ${key}`)
-      localStorage.setItem(key, JSON.stringify(data))
-      debug('storageManager', 'Data saved successfully to localStorage')
-      return true
-    } catch (err) {
-      error('storageManager', `Error saving to localStorage with key ${key}:`, err)
-      throw err
-    }
-  };
-
-  getFromLocalStorage(key: string, defaultValue = null) {
-    try {
-      debug('storageManager', `Getting data from localStorage with key ${key}`)
-      const data = localStorage.getItem(key)
-      if (data === null) {
-        debug('storageManager', `No data found in localStorage for key ${key}`)
-        return defaultValue
+      const value = await db.getItem<T>(key);
+      if (value !== null) {
+        items.push(value);
       }
-      const parsed = JSON.parse(data)
-      debug('storageManager', 'Data retrieved successfully from localStorage')
-      return parsed
-    } catch (err) {
-      error('storageManager', `Error getting from localStorage with key ${key}:`, err)
-      return defaultValue
     }
-  };
 
-  removeFromLocalStorage(key: string) {
+    debug(
+      "storageManager",
+      `All data retrieved successfully from ${storeName}`
+    );
+    return items;
+  }
+
+  async clearStore(storeName: StoreName): Promise<void> {
+    debug("storageManager", `Clearing all data from ${storeName}`);
+    await stores[storeName].clear();
+    debug("storageManager", `Store ${storeName} cleared successfully`);
+  }
+
+  saveToLocalStorage<T extends Serializable>(key: string, data: T): void {
+    if (!isSerializable(data)) {
+      throw new TypeError("Attempted to persist non-serializable data");
+    }
+
+    debug("storageManager", `Saving data to localStorage with key ${key}`);
+    localStorage.setItem(key, JSON.stringify(data));
+    debug("storageManager", "Data saved successfully to localStorage");
+  }
+
+  getFromLocalStorage<T extends Serializable>(
+    key: string,
+    defaultValue: T | null = null
+  ): T | null {
+    debug("storageManager", `Getting data from localStorage with key ${key}`);
+    const raw = localStorage.getItem(key);
+    if (raw === null) {
+      debug("storageManager", `No data found in localStorage for key ${key}`);
+      return defaultValue;
+    }
+
     try {
-      debug('storageManager', `Removing data from localStorage with key ${key}`)
-      localStorage.removeItem(key)
-      debug('storageManager', 'Data removed successfully from localStorage')
-      return true
+      return JSON.parse(raw) as T;
     } catch (err) {
-      error('storageManager', `Error removing from localStorage with key ${key}:`, err)
-      throw err
+      error(
+        "storageManager",
+        `Error parsing localStorage value for key ${key}:`,
+        err
+      );
+      return defaultValue;
     }
-  };
+  }
 
-  hasLocalStorageKey(key: string) {
-    return localStorage.getItem(key) !== null
-  };
+  removeFromLocalStorage(key: string): void {
+    debug("storageManager", `Removing data from localStorage with key ${key}`);
+    localStorage.removeItem(key);
+    debug("storageManager", "Data removed successfully from localStorage");
+  }
 
-  // Level management
-  async saveLevel(levelData: {
-    levelId: any;
-    time: any;
-    jumps: any;
-    deaths: any;
-    timestamp: number;
-  }) {
-    return this.saveToStore('game', levelData.levelId, levelData);
-  };
+  hasLocalStorageKey(key: string): boolean {
+    return localStorage.getItem(key) !== null;
+  }
 
-  async getLevel(levelId: any) {
-    return this.getFromStore('game', levelId)
-  };
+  get<T extends Serializable>(key: string, defaultValue: T): T {
+    return this.getFromLocalStorage<T>(key, defaultValue) ?? defaultValue;
+  }
 
-  async deleteLevel(levelId: any) {
-    return this.deleteFromStore('game', levelId)
-  };
+  set<T extends Serializable>(key: string, value: T): void {
+    this.saveToLocalStorage(key, value);
+  }
 
-  async getDownloadedLevels() {
-    return this.getAllFromStore('game')
-  };
+  async saveLevel(levelData: StoredLevelSummary): Promise<void> {
+    await this.saveToStore("game", levelData.levelId, levelData);
+  }
 
-  async isLevelDownloaded(levelId: any) {
-    const level = await this.getFromStore('game', levelId)
-    return level !== null
-  };
+  async getLevel<T extends Serializable>(levelId: string): Promise<T | null> {
+    return this.getFromStore<T>("game", levelId);
+  }
 
-  async downloadLevel(filename: any) {
-    try {
-      debug('storageManager', `Downloading level ${filename}`)
-      const response = await fetch(`${this.GITHUB_RAW_BASE}/${filename}`)
-      const levelCode = await response.text()
+  async deleteLevel(levelId: string): Promise<void> {
+    await this.deleteFromStore("game", levelId);
+  }
 
-      // Execute level code to get levelData
-      const levelData = new Function(`
-        window = {};
-        ${levelCode}
-        return window.levelData;
-      `)()
+  async getDownloadedLevels<T extends Serializable>(): Promise<T[]> {
+    return this.getAllFromStore<T>("game");
+  }
 
-      const levelConfig = {
-        ...levelData,
-        filename,
-        dateDownloaded: new Date().toISOString(),
-        originalCode: levelCode
-      }
+  async isLevelDownloaded(levelId: string): Promise<boolean> {
+    const level = await this.getFromStore<Serializable>("game", levelId);
+    return level !== null;
+  }
 
-      await this.saveToStore('game', filename, levelConfig)
-      debug('storageManager', `Level ${filename} downloaded successfully`)
-      return levelConfig
-    } catch (err) {
-      error('storageManager', `Error downloading level ${filename}:`, err)
-      throw err
+  async downloadLevel(filename: string): Promise<DownloadedLevel> {
+    debug("storageManager", `Downloading level ${filename}`);
+    const response = await fetch(`${this.GITHUB_RAW_BASE}/${filename}`);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to download level: ${response.status} ${response.statusText}`
+      );
     }
-  };
 
-  async deleteDownloadedLevel(filename: any) {
-    return this.deleteFromStore('game', filename)
-  };
+    const levelCode = await response.text();
 
-  // Score management
-  async saveScore(filename: any, time: any, jumps: any, deaths: any) {
-    try {
-      debug('storageManager', `Saving score for level ${filename}`)
-      const score = {
-        levelId: filename,
-        time,
-        jumps,
-        deaths,
-        timestamp: Date.now()
-      }
-      return this.saveToStore('scores', filename, score)
-    } catch (err) {
-      error('storageManager', 'Error in saveScore:', err)
-      throw err
-    }
-  };
+    const levelData = new Function(
+      "code",
+      `
+        const sandbox = {}
+        const window = sandbox
+        ;(function(){
+          // eslint-disable-next-line no-eval
+          eval(code)
+        }).call(sandbox)
+        if (!sandbox.levelData) {
+          throw new Error('Level data not found in downloaded script')
+        }
+        return sandbox.levelData
+      `
+    )(levelCode) as Record<string, Serializable>;
 
-  async getAllScores() {
-    return this.getAllFromStore('scores')
-  };
+    const levelConfig: DownloadedLevel = {
+      ...levelData,
+      filename,
+      dateDownloaded: new Date().toISOString(),
+      originalCode: levelCode,
+    };
 
-  // Test level management
-  async saveTestLevel(levelData: any) {
-    try {
-      debug('storageManager', 'Saving test level')
-      const testLevelData = {
-        ...levelData,
-        id: Date.now()
-      }
-      await this.saveToStore('editor', this.TEST_LEVEL_KEY, testLevelData)
-      debug('storageManager', 'Test level saved successfully')
-      return true
-    } catch (err) {
-      error('storageManager', 'Error in saveTestLevel:', err)
-      throw err
-    }
-  };
+    await this.saveToStore("game", filename, levelConfig);
+    debug("storageManager", `Level ${filename} downloaded successfully`);
+    return levelConfig;
+  }
 
-  async getTestLevel() {
-    try {
-      debug('storageManager', 'Getting test level')
-      return this.getFromStore('editor', this.TEST_LEVEL_KEY)
-    } catch (err) {
-      error('storageManager', 'Error in getTestLevel:', err)
-      throw err
-    }
-  };
+  async deleteDownloadedLevel(filename: string): Promise<void> {
+    await this.deleteFromStore("game", filename);
+  }
 
-  // Clear all data
-  async clearAllData() {
-    try {
-      debug('storageManager', 'Clearing all stored data')
+  async saveScore(
+    filename: string,
+    time: number,
+    jumps: number,
+    deaths: number
+  ): Promise<void> {
+    debug("storageManager", `Saving score for level ${filename}`);
+    const score: StoredScore = {
+      levelId: filename,
+      time,
+      jumps,
+      deaths,
+      timestamp: Date.now(),
+    };
+    await this.saveToStore("scores", filename, score);
+  }
 
-      await Promise.all([
-        this.clearStore('game'),
-        this.clearStore('scores'),
-        this.clearStore('editor')
-      ])
+  async getAllScores(): Promise<StoredScore[]> {
+    return this.getAllFromStore<StoredScore>("scores");
+  }
 
-      localStorage.clear()
-      debug('storageManager', 'All stored data cleared successfully')
-      return true
-    } catch (err) {
-      error('storageManager', 'Error clearing stored data:', err)
-      throw err
-    }
+  async saveTestLevel(levelData: Record<string, Serializable>): Promise<void> {
+    debug("storageManager", "Saving test level");
+    const testLevelData: Record<string, Serializable> = {
+      ...levelData,
+      id: Date.now(),
+    };
+    await this.saveToStore("editor", this.TEST_LEVEL_KEY, testLevelData);
+    debug("storageManager", "Test level saved successfully");
+  }
+
+  async getTestLevel<T extends Serializable>(): Promise<T | null> {
+    debug("storageManager", "Getting test level");
+    return this.getFromStore<T>("editor", this.TEST_LEVEL_KEY);
+  }
+
+  async clearAllData(): Promise<void> {
+    debug("storageManager", "Clearing all stored data");
+    await Promise.all([
+      this.clearStore("game"),
+      this.clearStore("scores"),
+      this.clearStore("editor"),
+    ]);
+    localStorage.clear();
+    debug("storageManager", "All stored data cleared successfully");
   }
 }
 

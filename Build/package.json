@@ -30,9 +30,10 @@
   },
   "homepage": "https://github.com/TeleporterDash/TeleporterDash#readme",
   "dependencies": {
+    "@pixi/display": "^7.4.3",
     "@pixi/filter-displacement": "^7.4.3",
     "@types/lodash": "^4.17.20",
-    "@types/howler": "^2.2.4",
+    "@types/matter-js": "^0.20.2",
     "color": "^5.0.0",
     "contro": "^2.2.0",
     "gsap": "^3.13.0",
@@ -47,6 +48,7 @@
     "vite": "^7.0.4"
   },
   "devDependencies": {
+    "@types/howler": "^2.2.12",
     "typescript": "^5.8.3"
   }
 }

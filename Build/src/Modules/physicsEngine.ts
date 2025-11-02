@@ -1,6 +1,10 @@
-import { getTeleportTarget } from "./teleporterEngine"
-import { isObjectActive, triggerGroup, handleUnlockOrb } from "./groupManager"
-import { timeManager } from "./timeManager"
+import {
+  getTeleportTarget,
+  TeleportMatrix,
+  TeleportableObject,
+} from "./teleporterEngine";
+import { isObjectActive, triggerGroup, handleUnlockOrb } from "./groupManager";
+import { timeManager } from "./timeManager";
 import Matter, {
   Engine,
   World,
@@ -10,7 +14,7 @@ import Matter, {
   Events,
   IEventCollision,
 } from "matter-js";
-import { debug, verbose } from "./logManager"
+import { debug, verbose } from "./logManager";
 
 const PHYSICS_CONSTANTS = {
   GRAVITY: 0.0005,
@@ -43,9 +47,10 @@ const CollisionCategories = {
   BLOCK: 0x0004,
 };
 
-type LevelBlock = {
+type LevelBlock = TeleportableObject & {
+  // allow arbitrary string keys so LevelBlock is compatible with GroupObject-like shapes
+  [key: string]: any;
   collision?: string;
-  type?: number;
   isModifier?: boolean;
   modifierType?: number;
   params?: any;
@@ -57,20 +62,28 @@ type LevelBlock = {
   _activated?: boolean;
 };
 
-type LevelMatrix = LevelBlock[][];
+type LevelMatrix = Array<Array<LevelBlock | null | undefined>>;
 
 type RenderEngineLike = {
   blockSize: number;
   particleSystem?: {
-    createExplosion?: (pos: { x: number; y: number }, color: string, count: number, life: number) => Promise<void>;
+    createExplosion?: (
+      pos: { x: number; y: number },
+      color: string,
+      count: number,
+      life: number
+    ) => Promise<void>;
     reset?: () => void;
   };
   isPaused?: boolean;
-  updatePlayerPosition?: (pos: { x: number; y: number }, angleDeg: number) => void;
+  updatePlayerPosition?: (
+    pos: { x: number; y: number },
+    angleDeg: number
+  ) => void;
   showModifierActivation?: (modifier: any) => void;
 };
 
-type AudioManagerLike = {
+export type AudioManagerLike = {
   playJumpSound?: () => void;
   playDeathSound?: () => void;
   playCompletionSound?: () => void;
@@ -111,11 +124,25 @@ class Player {
   jumpRotationDirection: 1 | -1;
   laneSwitchCooldown: number;
 
-  constructor(x: number, y: number, levelWidth: number, levelHeight: number, physicsEngine?: PhysicsEngine | null) {
+  // Expose x/y to satisfy PlayerLike consumers; use playerBody position when available.
+  get x(): number {
+    return this.physicsEngine?.playerBody?.position.x ?? this.initialPos.x;
+  }
+  get y(): number {
+    return this.physicsEngine?.playerBody?.position.y ?? this.initialPos.y;
+  }
+
+  constructor(
+    x: number,
+    y: number,
+    levelWidth: number,
+    levelHeight: number,
+    physicsEngine?: PhysicsEngine | null
+  ) {
     // Ensure the initial position is within bounds
     this.initialPos = {
       x: Math.max(0.5, Math.min(x + 0.5, levelWidth - 0.5)),
-      y: Math.min(levelHeight - 0.5, y + 0.5)
+      y: Math.min(levelHeight - 0.5, y + 0.5),
     };
     this.levelWidth = levelWidth;
     this.levelHeight = levelHeight;
@@ -167,12 +194,18 @@ class Player {
 
     if (this.isOnPlatform || this.jumpsRemaining === 2) {
       // applyForce expects a small force relative to mass; original values probably tuned for the game, keep them
-      Matter.Body.applyForce(body, body.position, { x: 0, y: PHYSICS_CONSTANTS.JUMP_FORCE });
+      Matter.Body.applyForce(body, body.position, {
+        x: 0,
+        y: PHYSICS_CONSTANTS.JUMP_FORCE,
+      });
       this.isJumping = true;
       this.isOnPlatform = false;
       this.doubleJumpAvailable = true;
     } else if (this.doubleJumpAvailable) {
-      Matter.Body.applyForce(body, body.position, { x: 0, y: PHYSICS_CONSTANTS.DOUBLE_JUMP_FORCE });
+      Matter.Body.applyForce(body, body.position, {
+        x: 0,
+        y: PHYSICS_CONSTANTS.DOUBLE_JUMP_FORCE,
+      });
       this.doubleJumpAvailable = false;
     } else {
       return false;
@@ -183,8 +216,10 @@ class Player {
 
   canJump(currentTime: number) {
     return (
-      (this.isOnPlatform || currentTime - this.lastGroundedTime <= PHYSICS_CONSTANTS.COYOTE_TIME) ||
-      (this.doubleJumpAvailable && this.physicsEngine?.playerBody?.velocity.y !== 0)
+      this.isOnPlatform ||
+      currentTime - this.lastGroundedTime <= PHYSICS_CONSTANTS.COYOTE_TIME ||
+      (this.doubleJumpAvailable &&
+        this.physicsEngine?.playerBody?.velocity.y !== 0)
     );
   }
 
@@ -198,7 +233,10 @@ class Player {
     if (!this.isFreeMoving) {
       const body = this.physicsEngine?.playerBody;
       if (body) {
-        Body.setPosition(body, { x: body.position.x, y: this.lanePositions[this.lane] });
+        Body.setPosition(body, {
+          x: body.position.x,
+          y: this.lanePositions[this.lane],
+        });
         Body.setVelocity(body, { x: body.velocity.x, y: 0 });
       }
     }
@@ -206,17 +244,24 @@ class Player {
   }
 
   toggleFreeMove(start: boolean) {
-    if (this.mode !== "clipper" || (this.lane !== 0 && this.lane !== 2)) return false;
+    if (this.mode !== "clipper" || (this.lane !== 0 && this.lane !== 2))
+      return false;
     this.isFreeMoving = start;
     const body = this.physicsEngine?.playerBody;
     if (!body) return false;
     if (start) {
       if (this.physicsEngine?.laneConstraint) {
-        World.remove(this.physicsEngine.engine.world, this.physicsEngine.laneConstraint);
+        World.remove(
+          this.physicsEngine.engine.world,
+          this.physicsEngine.laneConstraint
+        );
         this.physicsEngine.laneConstraint = null;
       }
     } else {
-      Body.setPosition(body, { x: body.position.x, y: this.lanePositions[this.lane] });
+      Body.setPosition(body, {
+        x: body.position.x,
+        y: this.lanePositions[this.lane],
+      });
       Body.setVelocity(body, { x: body.velocity.x, y: 0 });
       this.physicsEngine!.laneConstraint = Constraint.create({
         bodyA: body,
@@ -224,7 +269,10 @@ class Player {
         stiffness: 1,
         length: 0,
       });
-      World.add(this.physicsEngine!.engine.world, this.physicsEngine!.laneConstraint!);
+      World.add(
+        this.physicsEngine!.engine.world,
+        this.physicsEngine!.laneConstraint!
+      );
     }
     return true;
   }
@@ -244,16 +292,25 @@ class Player {
         stiffness: 1,
         length: 0,
       });
-      World.add(this.physicsEngine.engine.world, this.physicsEngine.laneConstraint);
+      World.add(
+        this.physicsEngine.engine.world,
+        this.physicsEngine.laneConstraint
+      );
       if (this.physicsEngine.groundConstraint) {
-        World.remove(this.physicsEngine.engine.world, this.physicsEngine.groundConstraint);
+        World.remove(
+          this.physicsEngine.engine.world,
+          this.physicsEngine.groundConstraint
+        );
         this.physicsEngine.groundConstraint = null;
       }
       Body.setStatic(body, false);
       this.physicsEngine.engine.gravity.y = 0;
     } else {
       if (this.physicsEngine.laneConstraint) {
-        World.remove(this.physicsEngine.engine.world, this.physicsEngine.laneConstraint);
+        World.remove(
+          this.physicsEngine.engine.world,
+          this.physicsEngine.laneConstraint
+        );
       }
       this.physicsEngine.laneConstraint = null;
       this.physicsEngine.engine.gravity.y = PHYSICS_CONSTANTS.GRAVITY;
@@ -273,9 +330,17 @@ class Player {
     this.laneSwitchCooldown = Math.max(0, this.laneSwitchCooldown - deltaTime);
     this.teleportCooldown = Math.max(0, this.teleportCooldown - deltaTime);
     if (this.isJumping && this.mode === "classic") {
-      this.rotation = (this.rotation + this.jumpRotationDirection * PHYSICS_CONSTANTS.ROTATION_SPEED * (deltaTime / 1000)) % 360;
+      this.rotation =
+        (this.rotation +
+          this.jumpRotationDirection *
+            PHYSICS_CONSTANTS.ROTATION_SPEED *
+            (deltaTime / 1000)) %
+        360;
       if (this.physicsEngine?.playerBody) {
-        Body.setAngle(this.physicsEngine.playerBody, (this.rotation * Math.PI) / 180);
+        Body.setAngle(
+          this.physicsEngine.playerBody,
+          (this.rotation * Math.PI) / 180
+        );
       }
     } else {
       this.rotation = 0;
@@ -329,14 +394,28 @@ class PhysicsEngine {
   lastHazardColor?: string;
   _eventListeners: Record<string, EventListener | undefined>;
 
-  constructor(levelMatrix: LevelMatrix, player?: Player, renderEngine?: RenderEngineLike, audioManager?: AudioManagerLike, cameraManager?: CameraManagerLike) {
+  constructor(
+    levelMatrix: LevelMatrix,
+    player?: Player,
+    renderEngine?: RenderEngineLike,
+    audioManager?: AudioManagerLike,
+    cameraManager?: CameraManagerLike
+  ) {
     this.levelMatrix = levelMatrix;
     this.renderEngine = renderEngine;
     this.audioManager = audioManager;
     this.cameraManager = cameraManager;
     this.levelWidth = levelMatrix[0].length;
     this.levelHeight = levelMatrix.length;
-    this.player = player || new Player(0, this.levelHeight - 1, this.levelWidth, this.levelHeight, this);
+    this.player =
+      player ||
+      new Player(
+        0,
+        this.levelHeight - 1,
+        this.levelWidth,
+        this.levelHeight,
+        this
+      );
     this.player.physicsEngine = this;
     this.groundLevel = this.levelHeight - 0.5;
     this.engine = Engine.create({ gravity: { y: PHYSICS_CONSTANTS.GRAVITY } });
@@ -351,7 +430,10 @@ class PhysicsEngine {
         frictionAir: 0.01,
         restitution: 0,
         label: "player",
-        collisionFilter: { category: CollisionCategories.PLAYER, mask: CollisionCategories.FLOOR | CollisionCategories.BLOCK },
+        collisionFilter: {
+          category: CollisionCategories.PLAYER,
+          mask: CollisionCategories.FLOOR | CollisionCategories.BLOCK,
+        },
       }
     );
     World.add(this.engine.world, this.playerBody);
@@ -368,7 +450,10 @@ class PhysicsEngine {
         isStatic: true,
         label: "floor",
         friction: 0,
-        collisionFilter: { category: CollisionCategories.FLOOR, mask: CollisionCategories.PLAYER },
+        collisionFilter: {
+          category: CollisionCategories.FLOOR,
+          mask: CollisionCategories.PLAYER,
+        },
       }
     );
     World.add(this.engine.world, this.floorBody);
@@ -385,7 +470,11 @@ class PhysicsEngine {
     this.groundConstraint = null;
     this._eventListeners = {};
 
-    Events.on(this.engine, "collisionStart", (event: IEventCollision<Matter.ICollisionPair>) => this.handleCollisions(event));
+    Events.on(
+      this.engine,
+      "collisionStart",
+      (event: IEventCollision<unknown>) => this.handleCollisions(event)
+    );
     this.setupEventListeners();
   }
 
@@ -402,14 +491,20 @@ class PhysicsEngine {
     for (let y = 0; y < this.levelMatrix.length; y++) {
       for (let x = 0; x < this.levelMatrix[y].length; x++) {
         const block = this.levelMatrix[y][x];
-        if (block && ["solid", "sticky", "hazard"].includes(block.collision || "")) {
+        if (
+          block &&
+          ["solid", "sticky", "hazard"].includes(block.collision || "")
+        ) {
           const body = Bodies.rectangle(x + 0.5, y + 0.5, 1, 1, {
             isStatic: true,
             label: block.collision,
             // store block data for collision handling
             // attach coordinates so we can refer back
             blockData: Object.assign({}, block, { x, y }),
-            collisionFilter: { category: CollisionCategories.BLOCK, mask: CollisionCategories.PLAYER },
+            collisionFilter: {
+              category: CollisionCategories.BLOCK,
+              mask: CollisionCategories.PLAYER,
+            },
           } as any);
           World.add(this.engine.world, body);
           this.blockBodies.push(body);
@@ -419,12 +514,16 @@ class PhysicsEngine {
   }
 
   setupEventListeners() {
-    const handler = (event: KeyboardEvent) => {
+    const handler: EventListener = (event: Event) => {
+      const keyboardEvent = event as KeyboardEvent;
       // Normalize keys to lower-case for letters, keep "Space" as canonical key
-      const keyRaw = event.key;
-      const key = (keyRaw === " " || event.code === "Space") ? "Space" : keyRaw.toLowerCase();
+      const keyRaw = keyboardEvent.key;
+      const key =
+        keyRaw === " " || keyboardEvent.code === "Space"
+          ? "Space"
+          : keyRaw.toLowerCase();
       // keydown -> true, keyup -> false
-      this.keys[key] = event.type === "keydown";
+      this.keys[key] = keyboardEvent.type === "keydown";
     };
     document.addEventListener("keydown", handler);
     document.addEventListener("keyup", handler);
@@ -459,8 +558,17 @@ class PhysicsEngine {
     const pos = this.playerBody.position;
     const vel = this.playerBody.velocity;
 
-    if (!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(vel.x) || !isFinite(vel.y)) {
-      debug("physicsEngine", "Invalid player position or velocity detected (NaN or Infinity):", { pos, vel });
+    if (
+      !isFinite(pos.x) ||
+      !isFinite(pos.y) ||
+      !isFinite(vel.x) ||
+      !isFinite(vel.y)
+    ) {
+      debug(
+        "physicsEngine",
+        "Invalid player position or velocity detected (NaN or Infinity):",
+        { pos, vel }
+      );
       Body.setPosition(this.playerBody, this.player.initialPos);
       Body.setVelocity(this.playerBody, { x: 0, y: 0 });
       this.player.isOnPlatform = true;
@@ -478,18 +586,21 @@ class PhysicsEngine {
     const maxY = this.groundLevel;
 
     if (pos.x < minX || pos.x > maxX || pos.y < minY || pos.y > maxY) {
-      debug("physicsEngine", `Player out of bounds at {x: ${pos.x}, y: ${pos.y}}, bounds are ${minX}-${maxX} x ${minY}-${maxY}`);
+      debug(
+        "physicsEngine",
+        `Player out of bounds at {x: ${pos.x}, y: ${pos.y}}, bounds are ${minX}-${maxX} x ${minY}-${maxY}`
+      );
 
       // Clamp position
       const clampedPos = {
         x: Math.max(minX, Math.min(pos.x, maxX)),
-        y: Math.max(minY, Math.min(pos.y, maxY))
+        y: Math.max(minY, Math.min(pos.y, maxY)),
       };
 
       // Stop movement if hitting boundaries
       const newVel = {
-        x: (pos.x < minX || pos.x > maxX) ? 0 : vel.x,
-        y: (pos.y < minY || pos.y > maxY) ? 0 : vel.y
+        x: pos.x < minX || pos.x > maxX ? 0 : vel.x,
+        y: pos.y < minY || pos.y > maxY ? 0 : vel.y,
       };
 
       Body.setPosition(this.playerBody, clampedPos);
@@ -513,7 +624,9 @@ class PhysicsEngine {
         (this.playerBody.angle * 180) / Math.PI
       );
     } else {
-      console.warn("PhysicsEngine: Skipping render update due to invalid position");
+      console.warn(
+        "PhysicsEngine: Skipping render update due to invalid position"
+      );
     }
   }
 
@@ -525,13 +638,19 @@ class PhysicsEngine {
     if (down("Space") || down("arrowup") || down("w")) {
       if (
         this.player.canJump(currentTime) &&
-        (currentTime - this.lastJumpPressTime >= PHYSICS_CONSTANTS.JUMP_BUFFER_TIME || !this.lastJumpPressTime)
+        (currentTime - this.lastJumpPressTime >=
+          PHYSICS_CONSTANTS.JUMP_BUFFER_TIME ||
+          !this.lastJumpPressTime)
       ) {
         this.lastJumpPressTime = currentTime;
-        if (this.player.jump() && this.audioManager) this.audioManager.playJumpSound();
+        if (this.player.jump()) this.audioManager?.playJumpSound?.();
       }
     }
-    if (this.player.mode === "clipper" && currentTime - this.lastLaneSwitchTime >= PHYSICS_CONSTANTS.LANE_SWITCH_DELAY) {
+    if (
+      this.player.mode === "clipper" &&
+      currentTime - this.lastLaneSwitchTime >=
+        PHYSICS_CONSTANTS.LANE_SWITCH_DELAY
+    ) {
       if (down("arrowup") || down("w")) {
         if (this.player.switchLane(-1)) this.lastLaneSwitchTime = currentTime;
       } else if (down("arrowdown") || down("s")) {
@@ -552,9 +671,12 @@ class PhysicsEngine {
       if (pos.x < 0.5 || pos.x > this.levelWidth - 0.5) {
         Body.setPosition(this.playerBody, {
           x: Math.max(0.5, Math.min(pos.x, this.levelWidth - 0.5)),
-          y: pos.y
+          y: pos.y,
         });
-        Body.setVelocity(this.playerBody, { x: 0, y: this.playerBody.velocity.y });
+        Body.setVelocity(this.playerBody, {
+          x: 0,
+          y: this.playerBody.velocity.y,
+        });
       }
     }
   }
@@ -568,8 +690,16 @@ class PhysicsEngine {
     const vel = body.velocity;
 
     // Handle invalid positions first
-    if (!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(vel.x) || !isFinite(vel.y)) {
-      debug("physicsEngine", "Invalid position or velocity detected, resetting player");
+    if (
+      !isFinite(pos.x) ||
+      !isFinite(pos.y) ||
+      !isFinite(vel.x) ||
+      !isFinite(vel.y)
+    ) {
+      debug(
+        "physicsEngine",
+        "Invalid position or velocity detected, resetting player"
+      );
       Body.setPosition(body, this.player.initialPos);
       Body.setVelocity(body, { x: 0, y: 0 });
       return;
@@ -583,13 +713,13 @@ class PhysicsEngine {
       // Clamp position
       const clampedPos = {
         x: Math.max(0.5, Math.min(pos.x, this.levelWidth - 0.5)),
-        y: Math.max(0.5, Math.min(pos.y, this.groundLevel))
+        y: Math.max(0.5, Math.min(pos.y, this.groundLevel)),
       };
 
       // Clamp velocity - stop movement in the direction of the boundary
       const clampedVel = {
         x: isOutOfBoundsX ? 0 : vel.x,
-        y: isOutOfBoundsY ? 0 : vel.y
+        y: isOutOfBoundsY ? 0 : vel.y,
       };
 
       // Apply position and velocity constraints
@@ -611,7 +741,10 @@ class PhysicsEngine {
     const maxVelocity = PHYSICS_CONSTANTS.MOVE_SPEED * 2;
     const clampedVel = {
       x: Math.max(-maxVelocity, Math.min(vel.x, maxVelocity)),
-      y: Math.max(-maxVelocity, Math.min(vel.y, PHYSICS_CONSTANTS.MAX_FALL_SPEED))
+      y: Math.max(
+        -maxVelocity,
+        Math.min(vel.y, PHYSICS_CONSTANTS.MAX_FALL_SPEED)
+      ),
     };
 
     if (clampedVel.x !== vel.x || clampedVel.y !== vel.y) {
@@ -619,12 +752,13 @@ class PhysicsEngine {
     }
 
     if (this.player.mode === "clipper" && this.player.isFreeMoving) {
-      const velocityY = this.player.lane === 0
-        ? Math.max(-PHYSICS_CONSTANTS.MOVE_SPEED * 2, body.velocity.y)
-        : Math.min(PHYSICS_CONSTANTS.MOVE_SPEED * 2, body.velocity.y);
+      const velocityY =
+        this.player.lane === 0
+          ? Math.max(-PHYSICS_CONSTANTS.MOVE_SPEED * 2, body.velocity.y)
+          : Math.min(PHYSICS_CONSTANTS.MOVE_SPEED * 2, body.velocity.y);
       Body.setVelocity(body, {
         x: Math.min(PHYSICS_CONSTANTS.MOVE_SPEED, body.velocity.x),
-        y: velocityY
+        y: velocityY,
       });
     }
 
@@ -658,9 +792,11 @@ class PhysicsEngine {
         if (this.audioManager.restartMusicOnDeath) {
           this.audioManager.backgroundMusicTime = 0;
         } else if (this.audioManager.backgroundMusic) {
-          this.audioManager.backgroundMusicTime = this.audioManager.backgroundMusic.currentTime || 0;
+          this.audioManager.backgroundMusicTime =
+            this.audioManager.backgroundMusic.currentTime || 0;
         }
-        if (!this.audioManager.isMuted) this.audioManager.pauseBackgroundMusic?.();
+        if (!this.audioManager.isMuted)
+          this.audioManager.pauseBackgroundMusic?.();
       }
       this.resetDisplay();
       if (!window.autoRestart) {
@@ -674,17 +810,24 @@ class PhysicsEngine {
     }
   }
 
-  handleCollisions(event: IEventCollision<Matter.ICollisionPair>) {
+  handleCollisions(event: IEventCollision<unknown>) {
     if (this.isDead) return;
     this.isDead = this.isComplete = false;
 
     for (const pair of event.pairs) {
       const { bodyA, bodyB } = pair;
-      const playerBody = bodyA.label === "player" ? bodyA : bodyB.label === "player" ? bodyB : null;
+      const playerBody =
+        bodyA.label === "player"
+          ? bodyA
+          : bodyB.label === "player"
+          ? bodyB
+          : null;
       const otherBody = playerBody === bodyA ? bodyB : bodyA;
-      const otherBlockData: LevelBlock | undefined = (otherBody as any).blockData;
+      const otherBlockData: LevelBlock | undefined = (otherBody as any)
+        .blockData;
 
-      if (!playerBody || (!otherBlockData && otherBody.label !== "floor")) continue;
+      if (!playerBody || (!otherBlockData && otherBody.label !== "floor"))
+        continue;
 
       const block = otherBlockData;
       if (block) {
@@ -709,10 +852,15 @@ class PhysicsEngine {
           this.activeModifiers.add(block);
         }
         // teleporter (generic)
-        if (block.type === BLOCK_TYPE.TELEPORTER && this.player.teleportCooldown <= 0) {
+        if (
+          block.type === BLOCK_TYPE.TELEPORTER &&
+          this.player.teleportCooldown <= 0
+        ) {
           const angleRad = ((block.transform?.rotation || 0) * Math.PI) / 180;
           const distance = 100 / 32;
-          let newX = playerBody.position.x + Math.cos(angleRad) * distance * this.player.facing;
+          let newX =
+            playerBody.position.x +
+            Math.cos(angleRad) * distance * this.player.facing;
           let newY = playerBody.position.y + Math.sin(angleRad) * distance;
           // clamp into playable area (0.5..levelWidth-0.5 / groundLevel)
           newY = Math.min(this.groundLevel, Math.max(0.5, newY));
@@ -721,22 +869,59 @@ class PhysicsEngine {
             Body.setPosition(playerBody, { x: newX, y: newY });
             this.player.teleportCooldown = 15;
           }
-        } else if ([BLOCK_TYPE.TELEPORT_START, BLOCK_TYPE.TELEPORT_END].includes(block.type as number) && this.player.teleportCooldown <= 0) {
-          const target = getTeleportTarget(block, this.levelMatrix);
+        } else if (
+          [BLOCK_TYPE.TELEPORT_START, BLOCK_TYPE.TELEPORT_END].includes(
+            block.type as number
+          ) &&
+          this.player.teleportCooldown <= 0
+        ) {
+          const target =
+            block.id != null && typeof block.type === "number"
+              ? getTeleportTarget(block, this.levelMatrix as TeleportMatrix)
+              : null;
           if (target && isFinite(target.x) && isFinite(target.y)) {
-            Body.setPosition(playerBody, { x: target.x + 0.5, y: Math.min(this.groundLevel, target.y + 0.5) });
+            Body.setPosition(playerBody, {
+              x: target.x + 0.5,
+              y: Math.min(this.groundLevel, target.y + 0.5),
+            });
             this.player.teleportCooldown = 15;
           }
-        } else if (block.type === BLOCK_TYPE.TRIGGER && isObjectActive(block) && this.player.teleportCooldown <= 0) {
-          block.group && triggerGroup(block.group, this.levelMatrix, this.player, this.cameraManager);
-        } else if (block.type === BLOCK_TYPE.UNLOCK_ORB && !this.unlockedGroups.has(block.group as any)) {
-          handleUnlockOrb(block, Math.floor(playerBody.position.x), Math.floor(playerBody.position.y), this.levelMatrix, this.player, this.cameraManager);
+        } else if (
+          block.type === BLOCK_TYPE.TRIGGER &&
+          isObjectActive(block) &&
+          this.player.teleportCooldown <= 0
+        ) {
+          block.group &&
+            triggerGroup(
+              block.group,
+              this.levelMatrix,
+              this.player,
+              this.cameraManager
+            );
+        } else if (
+          block.type === BLOCK_TYPE.UNLOCK_ORB &&
+          !this.unlockedGroups.has(block.group as any)
+        ) {
+          handleUnlockOrb(
+            block,
+            Math.floor(playerBody.position.x),
+            Math.floor(playerBody.position.y),
+            this.levelMatrix,
+            this.player,
+            this.cameraManager
+          );
           this.unlockedGroups.add(block.group as any);
         } else if (block.type === BLOCK_TYPE.CLIPPER_MODE) {
           this.player.setMode("clipper");
         } else if (block.type === BLOCK_TYPE.CLASSIC_MODE) {
           this.player.setMode("classic");
-          block.group && triggerGroup(block.group, this.levelMatrix, this.player, this.cameraManager);
+          block.group &&
+            triggerGroup(
+              block.group,
+              this.levelMatrix,
+              this.player,
+              this.cameraManager
+            );
         } else if (block.type === BLOCK_TYPE.LEFT_ORB) {
           this.player.setFacing(-1);
         } else if (block.type === BLOCK_TYPE.RIGHT_ORB) {
@@ -745,7 +930,12 @@ class PhysicsEngine {
       }
 
       // landing detection: floor or solid/sticky blocks and player is falling (positive y in Matter)
-      if ((otherBody.label === "floor" || (block?.collision === "solid" || block?.collision === "sticky")) && playerBody.velocity.y > 0) {
+      if (
+        (otherBody.label === "floor" ||
+          block?.collision === "solid" ||
+          block?.collision === "sticky") &&
+        playerBody.velocity.y > 0
+      ) {
         this.player.isOnPlatform = true;
         this.player.isJumping = false;
         this.player.jumpsRemaining = 2;
@@ -754,16 +944,24 @@ class PhysicsEngine {
         this.player.rotation = 0;
         Body.setAngle(playerBody, 0);
         if (block?.collision === "sticky") {
-          Body.setVelocity(playerBody, { x: playerBody.velocity.x * 0.5, y: playerBody.velocity.y });
+          Body.setVelocity(playerBody, {
+            x: playerBody.velocity.x * 0.5,
+            y: playerBody.velocity.y,
+          });
         }
       }
     }
 
     // deactivate modifiers if we moved away
     if (this.activeModifiers.size > 0) {
-      const { x, y } = this.playerBody.position;
+      const mainPlayerBody = this.playerBody;
+      if (!mainPlayerBody) return;
+      const { x, y } = mainPlayerBody.position;
       for (const modifier of Array.from(this.activeModifiers)) {
-        if (Math.hypot((modifier.x ?? 0) + 0.5 - x, (modifier.y ?? 0) + 0.5 - y) > 1.5) {
+        if (
+          Math.hypot((modifier.x ?? 0) + 0.5 - x, (modifier.y ?? 0) + 0.5 - y) >
+          1.5
+        ) {
           modifier._activated = false;
           this.activeModifiers.delete(modifier);
         }
@@ -776,9 +974,16 @@ class PhysicsEngine {
     this.isDead = this.isComplete = false;
     this.activeModifiers.clear();
     this.lastJumpPressTime = 0;
-    if (this.playerBody && isFinite(this.playerBody.position.x) && isFinite(this.playerBody.position.y)) {
+    if (
+      this.playerBody &&
+      isFinite(this.playerBody.position.x) &&
+      isFinite(this.playerBody.position.y)
+    ) {
       this.renderEngine?.updatePlayerPosition?.(
-        { x: this.playerBody.position.x - 0.5, y: this.playerBody.position.y - 0.5 },
+        {
+          x: this.playerBody.position.x - 0.5,
+          y: this.playerBody.position.y - 0.5,
+        },
         (this.playerBody.angle * 180) / Math.PI
       );
     }
@@ -821,7 +1026,10 @@ class PhysicsEngine {
     this.initializeLevelBlocks();
     // also reposition the floor
     if (this.floorBody) {
-      Body.setPosition(this.floorBody, { x: this.levelWidth / 2, y: this.levelHeight + 0.5 });
+      Body.setPosition(this.floorBody, {
+        x: this.levelWidth / 2,
+        y: this.levelHeight + 0.5,
+      });
       // width change is not trivial in matter; recreate floor if needed
     }
   }
@@ -839,21 +1047,38 @@ class PhysicsEngine {
     if (!modifier?.isModifier) return;
     switch (modifier.modifierType) {
       case 21:
-        this.cameraManager?.zoomTo?.(modifier.params?.level || 1.5, modifier.params?.duration || 2);
+        this.cameraManager?.zoomTo?.(
+          modifier.params?.level || 1.5,
+          modifier.params?.duration || 2
+        );
         break;
       case 22:
-        this.cameraManager?.shake?.(modifier.params?.intensity || 15, modifier.params?.duration || 2);
+        this.cameraManager?.shake?.(
+          modifier.params?.intensity || 15,
+          modifier.params?.duration || 2
+        );
         break;
       case 23:
-        this.cameraManager?.tilt?.(modifier.params?.angle || 15, modifier.params?.direction || "left", modifier.params?.duration || 3);
+        this.cameraManager?.tilt?.(
+          modifier.params?.angle || 15,
+          modifier.params?.direction || "left",
+          modifier.params?.duration || 3
+        );
         break;
       case 24:
-        this.cameraManager?.pan?.(modifier.params?.offsetX || 300, modifier.params?.offsetY || 150, modifier.params?.duration || 3);
+        this.cameraManager?.pan?.(
+          modifier.params?.offsetX || 300,
+          modifier.params?.offsetY || 150,
+          modifier.params?.duration || 3
+        );
         break;
       case 25:
         timeManager.setTimeScale(modifier.params?.scale || 0.3);
         if (modifier.params?.duration) {
-          setTimeout(() => timeManager.resetTimeScale(), (modifier.params.duration * 1000) || 3000);
+          setTimeout(
+            () => timeManager.resetTimeScale(),
+            modifier.params.duration * 1000 || 3000
+          );
         }
         break;
     }

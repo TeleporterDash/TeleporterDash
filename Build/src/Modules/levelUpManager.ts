@@ -1,22 +1,33 @@
-import { html } from 'lit-html';
-import { popupManager } from './popupManager.js';
-import { currencyManager } from './currencyManager.js';
+import { html } from "lit-html";
+import { popupManager } from "./popupManager";
+import { currencyManager } from "./currencyManager";
 
-export const LevelUpManager = {
-  checkLevelUp() {
-    while (currencyManager.experience >= this.getRequiredExpForLevel(currencyManager.level + 1)) {
+type LevelUpManagerContract = {
+  checkLevelUp(): void;
+  getRequiredExpForLevel(level: number): number;
+};
+
+export const LevelUpManager: LevelUpManagerContract = {
+  checkLevelUp(): void {
+    // Loop until experience no longer meets the requirement for next level
+    while (true) {
+      const { experience, level } = currencyManager.getState();
+      const requiredExp = this.getRequiredExpForLevel(level + 1);
+      if (experience < requiredExp) break;
+
       currencyManager.addLevel(1);
+      const { level: newLevel } = currencyManager.getState();
       popupManager.createRegularPopup(
-        'level-up',
-        html`<div>Leveled up to level ${currencyManager.level}!</div>`
+        "level-up",
+        html`<div>Leveled up to level ${newLevel}!</div>`
       );
-      popupManager.showPopup('level-up');
-      setTimeout(() => popupManager.hidePopup('level-up'), 3000);
+      popupManager.showPopup("level-up");
+      setTimeout(() => popupManager.hidePopup("level-up"), 3000);
     }
   },
 
-  getRequiredExpForLevel(level) {
+  getRequiredExpForLevel(level: number): number {
     // Total experience required for level N = 50 * (N-1) * N
     return 50 * (level - 1) * level;
-  }
+  },
 };

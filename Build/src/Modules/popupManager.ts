@@ -1,36 +1,72 @@
-// Modules/popupManager.js
-import { html, render } from 'lit-html';
-import { warn, debug, setLogLevel } from './logManager.js';
-import { applyVisualEffects } from './visualEngine.js';
+import { html, render, type TemplateResult } from "lit-html";
+import { warn, debug, setLogLevel } from "./logManager";
+import "../CSS/popupManager.css";
 
-setLogLevel('debug');
+setLogLevel("debug");
+
+interface PopupManagerOptions {
+  achievementIconPath?: string;
+}
+
+interface AchievementData {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  points: number;
+}
+
+interface ErrorPopupConfig {
+  title?: string;
+  message?: string;
+  details?: string;
+}
+
+type PopupId = string;
+
+type PopupContent = TemplateResult | string;
+
+type PopupElement = HTMLElement;
 
 export class PopupManager {
-  constructor({ achievementIconPath = '../Sprites/Achievements' } = {}) {
+  private readonly achievementIconPath: string;
+  private readonly popups: Map<PopupId, PopupElement>;
+  private readonly achievementPopups: Map<PopupId, PopupElement>;
+  private currentErrorPopup: PopupElement | null;
+
+  constructor({
+    achievementIconPath = "../Sprites/Achievements",
+  }: PopupManagerOptions = {}) {
     this.popups = new Map();
     this.achievementPopups = new Map();
     this.achievementIconPath = achievementIconPath;
     this.currentErrorPopup = null;
   }
 
-  // Generic popup template
-  popupTemplate(id, content, isAchievement = false) {
+  private popupTemplate(
+    id: PopupId,
+    content: PopupContent,
+    isAchievement = false
+  ): TemplateResult {
     return html`
       <div
-        class="popup ${isAchievement ? 'achievement-popup' : ''}"
+        class="popup ${isAchievement ? "achievement-popup" : ""}"
         id="popup-${id}"
-        role=${isAchievement ? 'dialog' : ''}
-        aria-labelledby=${isAchievement ? `popup-${id}-title` : ''}
+        role=${isAchievement ? "dialog" : ""}
+        aria-labelledby=${isAchievement ? `popup-${id}-title` : ""}
       >
         <div class="popup-content">${content}</div>
       </div>
     `;
   }
 
-  // Achievement popup template
-  achievementPopupTemplate(achievement) {
+  private achievementPopupTemplate(
+    achievement: AchievementData
+  ): TemplateResult {
     return html`
-      <h2 id="popup-${achievement.id}-title" class="visually-hidden">Achievement Unlocked!</h2>
+      <h2 id="popup-${achievement.id}-title" class="visually-hidden">
+        Achievement Unlocked!
+      </h2>
       <button
         class="popup-close"
         title="Close"
@@ -57,68 +93,93 @@ export class PopupManager {
     `;
   }
 
-  // Error popup template
-  errorPopupTemplate(errorConfig) {
+  private errorPopupTemplate(errorConfig: ErrorPopupConfig): TemplateResult {
     return html`
       <div class="popup error-popup">
-        <h2>${errorConfig.title || 'Error'}</h2>
-        <p>${errorConfig.message || 'An unexpected error occurred.'}</p>
+        <h2>${errorConfig.title ?? "Error"}</h2>
+        <p>${errorConfig.message ?? "An unexpected error occurred."}</p>
         ${errorConfig.details
           ? html`<pre class="error-details">${errorConfig.details}</pre>`
-          : ''}
+          : ""}
         <button @click=${() => this.hideErrorPopup()}>Close</button>
       </div>
     `;
   }
 
-  createPopup(id, content, isAchievement = false) {
-    if (!document.body) {
-      warn('popupManager', 'Cannot create popup: document.body is not available.');
+  private enhanceAchievementPopup(popup: PopupElement | null): void {
+    const content = popup?.querySelector<HTMLElement>(".popup-content");
+    if (content) {
+      content.classList.add("achievement-effect");
+    }
+  }
+
+  private ensureContainer(): HTMLDivElement | null {
+    if (typeof document === "undefined" || !document.body) {
+      warn(
+        "popupManager",
+        "Cannot create popup: document.body is not available."
+      );
+      return null;
+    }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    return container;
+  }
+
+  createPopup(
+    id: PopupId,
+    content: PopupContent,
+    isAchievement = false
+  ): PopupElement | null {
+    const container = this.ensureContainer();
+    if (!container) return null;
+
+    render(this.popupTemplate(id, content, isAchievement), container);
+
+    const popup = container.firstElementChild as PopupElement | null;
+    if (!popup) {
+      container.remove();
+      warn("popupManager", `Unable to render popup with ID ${id}`);
       return null;
     }
 
-    const popupContainer = document.createElement('div');
-    document.body.appendChild(popupContainer);
-    render(this.popupTemplate(id, content, isAchievement), popupContainer);
-
-    const popup = popupContainer.firstElementChild;
     if (isAchievement) {
       this.achievementPopups.set(id, popup);
+      this.enhanceAchievementPopup(popup);
     } else {
       this.popups.set(id, popup);
     }
+
     return popup;
   }
 
-  showPopup(id, isAchievement = false) {
-    const popup = isAchievement ? this.achievementPopups.get(id) : this.popups.get(id);
+  showPopup(id: PopupId, isAchievement = false): void {
+    const popup = isAchievement
+      ? this.achievementPopups.get(id)
+      : this.popups.get(id);
     if (!popup) {
-      warn('popupManager', `No popup found with ID ${id}`);
+      warn("popupManager", `No popup found with ID ${id}`);
       return;
     }
 
-    popup.classList.add('active');
-    popup.style.opacity = '1';
-    popup.style.transition = 'opacity 0.3s ease-in-out';
-
-    if (isAchievement) {
-      applyVisualEffects(popup.querySelector('.popup-content'), { type: 'achievement' });
-    }
+    popup.classList.add("active");
+    popup.style.opacity = "1";
+    popup.style.transition = "opacity 0.3s ease-in-out";
   }
 
-  hidePopup(id, isAchievement = false) {
-    const popup = isAchievement ? this.achievementPopups.get(id) : this.popups.get(id);
+  hidePopup(id: PopupId, isAchievement = false): void {
+    const popup = isAchievement
+      ? this.achievementPopups.get(id)
+      : this.popups.get(id);
     if (!popup) {
-      warn('popupManager', `No popup found with ID ${id}`);
+      warn("popupManager", `No popup found with ID ${id}`);
       return;
     }
 
-    popup.classList.remove('active');
-    popup.style.opacity = '0';
+    popup.classList.remove("active");
+    popup.style.opacity = "0";
     setTimeout(() => {
-      if (popup.parentElement) {
-        popup.parentElement.remove();
-      }
+      popup.parentElement?.remove();
       if (isAchievement) {
         this.achievementPopups.delete(id);
       } else {
@@ -127,57 +188,56 @@ export class PopupManager {
     }, 300);
   }
 
-  createAchievementPopup(achievement) {
-    const popup = this.createPopup(achievement.id, this.achievementPopupTemplate(achievement), true);
+  createAchievementPopup(achievement: AchievementData): void {
+    const popup = this.createPopup(
+      achievement.id,
+      this.achievementPopupTemplate(achievement),
+      true
+    );
     if (popup) {
       this.showPopup(achievement.id, true);
     }
   }
 
-  createRegularPopup(id, content) {
+  createRegularPopup(id: PopupId, content: PopupContent): PopupElement | null {
     return this.createPopup(id, content, false);
   }
 
-  showErrorPopup(errorConfig) {
+  showErrorPopup(errorConfig: ErrorPopupConfig): PopupElement | null {
     if (this.currentErrorPopup) {
       this.hideErrorPopup();
     }
 
-    if (!document.body) {
-      warn('popupManager', 'Cannot create popup: document.body is not available.');
-      return null;
+    const container = this.ensureContainer();
+    if (!container) return null;
+
+    render(this.errorPopupTemplate(errorConfig), container);
+
+    this.currentErrorPopup = container.firstElementChild as PopupElement | null;
+
+    if (this.currentErrorPopup) {
+      setTimeout(() => this.hideErrorPopup(), 10_000);
+    } else {
+      container.remove();
     }
-
-    const popupContainer = document.createElement('div');
-    document.body.appendChild(popupContainer);
-    render(this.errorPopupTemplate(errorConfig), popupContainer);
-
-    this.currentErrorPopup = popupContainer.firstElementChild;
-
-    // Automatically close after 10 seconds
-    setTimeout(() => this.hideErrorPopup(), 10000);
 
     return this.currentErrorPopup;
   }
 
-  hideErrorPopup() {
-    if (this.currentErrorPopup && this.currentErrorPopup.parentElement) {
+  hideErrorPopup(): void {
+    if (this.currentErrorPopup?.parentElement) {
       this.currentErrorPopup.parentElement.remove();
-      this.currentErrorPopup = null;
     }
+    this.currentErrorPopup = null;
   }
 
-  cleanup() {
+  cleanup(): void {
     this.popups.forEach((popup) => popup.parentElement?.remove());
     this.achievementPopups.forEach((popup) => popup.parentElement?.remove());
     this.popups.clear();
     this.achievementPopups.clear();
-    debug('popupManager', 'Popup manager cleaned up');
+    debug("popupManager", "Popup manager cleaned up");
   }
 }
-
-// CSS
-const style = document.getElementsByName('../CSS/popupManager.css');
-document.head.appendChild(style);
 
 export const popupManager = new PopupManager();
