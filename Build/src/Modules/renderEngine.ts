@@ -15,6 +15,7 @@ import {
 } from "./animationEngine";
 import { hexToNumber } from "./colorUtils";
 import { warn, error, debug, verbose, setLogLevel } from "./logManager";
+import { timeManager } from "./timeManager";
 import { map, flatMap, filter } from "lodash";
 import {
   Container,
@@ -504,13 +505,24 @@ export class RenderEngine {
     debug("renderEngine", "Setting player sprite properties...");
     this.playerSprite.zIndex = 10000;
     const spriteSize = 30;
+    debug("renderEngine", `Player sprite initial size: ${this.playerSprite.width} x ${this.playerSprite.height}`);
     this.playerSprite.scale.set(this.blockSize / spriteSize);
+    debug("renderEngine", `Player sprite scale: x=${this.playerSprite.scale.x}, y=${this.playerSprite.scale.y}, width=${this.playerSprite.width}, height=${this.playerSprite.height}`);
+    debug("renderEngine", `Player sprite texture: ${this.playerSprite.texture?.baseTexture?.toString()}`);
     this.setSpriteTransform(this.playerSprite, player, {
       xOffset: 0.5,
       yOffset: 0.75,
     });
+    debug("renderEngine", `Player sprite position set to: x=${this.playerSprite.x}, y=${this.playerSprite.y}, anchor=${this.playerSprite.anchor.x},${this.playerSprite.anchor.y}`);
+    debug("renderEngine", `Player data: x=${player.x}, y=${player.y}`);
+    debug("renderEngine", `Container offset: x=${this.container.x}, y=${this.container.y}`);
+    debug("renderEngine", `Effective screen position: x=${this.playerSprite.x + this.container.x}, y=${this.playerSprite.y + this.container.y}`);
+    debug("renderEngine", `Canvas dimensions: ${this.pixiApp.screen.width}x${this.pixiApp.screen.height}`);
     debug("renderEngine", "Adding player sprite to container...");
     this.container.addChild(this.playerSprite);
+    debug("renderEngine", `Player sprite parent: ${this.playerSprite.parent?.constructor.name}`);
+    debug("renderEngine", `Container children count: ${this.container.children.length}`);
+    debug("renderEngine", `Player sprite visible: ${this.playerSprite.visible}, alpha: ${this.playerSprite.alpha}`);
     debug("renderEngine", "Player sprite rendered successfully");
     verbose(
       "renderEngine",
@@ -524,14 +536,15 @@ export class RenderEngine {
    * @param {any} physics - Physics engine
    */
   startGameLoop(player: any, physics: any): void {
-    let lastTime = performance.now();
     this.tickerCallback = (delta: number): void => {
+      // Use timeManager to get consistent deltaTime in SECONDS
+      // Pass current time to timeManager to ensure consistent timing
       const currentTime = performance.now();
-      const deltaTimeSeconds = (currentTime - lastTime) / 1000;
-      lastTime = currentTime;
+      const deltaTimeSeconds = timeManager.update(currentTime);
+      const deltaTimeMs = deltaTimeSeconds * 1000;
 
-      verbose("renderEngine", "Ticker running, delta:", deltaTimeSeconds);
-      physics.update();
+      verbose("renderEngine", "Ticker running, deltaTime:", deltaTimeSeconds, "seconds");
+      physics.update(deltaTimeMs);
       this.updatePlayerPosition(player, player.rotation);
       if (!this.isPaused) {
         updateVisualEffects(this.blockSprites, deltaTimeSeconds);
@@ -598,6 +611,8 @@ export class RenderEngine {
       );
     }
     debug("renderEngine", "Game loop started");
+    debug("renderEngine", `Container visible: ${this.container.visible}, alpha: ${this.container.alpha}`);
+    debug("renderEngine", `Player sprite exists: ${!!this.playerSprite}, visible: ${this.playerSprite?.visible}, alpha: ${this.playerSprite?.alpha}`);
   }
 
   /**
@@ -606,7 +621,10 @@ export class RenderEngine {
    * @param {number} rotation - Rotation in degrees
    */
   updatePlayerPosition(player: any, rotation?: number): void {
-    if (!this.playerSprite) return;
+    if (!this.playerSprite) {
+      debug("renderEngine", "Cannot update player position: playerSprite is null");
+      return;
+    }
     this.setSpriteTransform(
       this.playerSprite,
       { ...player, rotation },
@@ -614,9 +632,7 @@ export class RenderEngine {
     );
     verbose(
       "renderEngine",
-      `Player position updated: x=${player.x}, y=${player.y}, visualY=${
-        player.y + 0.75
-      }, rotation=${rotation || player.rotation || 0}`
+      `Player position updated: block coords (${player.x.toFixed(2)}, ${player.y.toFixed(2)}), sprite world pos (${this.playerSprite.x.toFixed(0)}, ${this.playerSprite.y.toFixed(0)}), screen pos (${(this.playerSprite.x + this.container.x).toFixed(0)}, ${(this.playerSprite.y + this.container.y).toFixed(0)}), visible=${this.playerSprite.visible}`
     );
   }
 

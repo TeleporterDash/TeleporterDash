@@ -193,7 +193,7 @@ async function initializeGameFromMatrix(): Promise<void> {
       cameraManager = new CameraManager(
         activeRenderEngine.container,
         parsedMatrix[0].length * window.blockSize,
-        (parsedMatrix.length + 1) * window.blockSize,
+        (parsedMatrix.length + 2) * window.blockSize, // +2 to include floor space
         pixiApp.canvas.width,
         pixiApp.canvas.height
       );
@@ -203,7 +203,7 @@ async function initializeGameFromMatrix(): Promise<void> {
         0,
         parsedMatrix[0].length * window.blockSize,
         0,
-        (parsedMatrix.length + 1) * window.blockSize
+        (parsedMatrix.length + 2) * window.blockSize // +2 to include floor space
       );
     }
 
@@ -318,7 +318,13 @@ async function initializeGameFromMatrix(): Promise<void> {
     }
 
     if (window.physicsEngine && !activeRenderEngine.playerSprite) {
-      activeRenderEngine.renderPlayer(window.player);
+      try {
+        console.log("[main] About to render player at position:", window.player.x, window.player.y);
+        await activeRenderEngine.renderPlayer(window.player);
+        console.log("[main] Player sprite created:", activeRenderEngine.playerSprite);
+      } catch (err) {
+        console.error("[main] Error rendering player:", err);
+      }
     }
 
     // Only start game loop if it hasn't been started
@@ -466,8 +472,10 @@ async function restartGame(): Promise<void> {
         window.renderEngine.playerSprite = null;
       }
       await window.renderEngine.renderPlayer(window.player); // Removed spriteMap parameter since it's now stored in renderEngine
-      // Restart the game loop within RenderEngine
-      window.renderEngine.startGameLoop(window.player, window.physicsEngine);
+      // Restart the game loop within RenderEngine ONLY if not already running
+      if (!window.renderEngine.tickerCallback) {
+        window.renderEngine.startGameLoop(window.player, window.physicsEngine);
+      }
     } catch (error) {
       console.error("Error during game restart rendering:", error);
     }

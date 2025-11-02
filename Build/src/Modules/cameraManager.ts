@@ -598,6 +598,8 @@ export default class CameraManager {
     this.container.x = -this.x;
     this.container.y = -this.y;
 
+    debug("CameraManager", `Camera position: (${this.x.toFixed(2)}, ${this.y.toFixed(2)}), Container offset: (${this.container.x.toFixed(2)}, ${this.container.y.toFixed(2)}), Bounds: ${this.bounds.left}-${this.bounds.right} x ${this.bounds.top}-${this.bounds.bottom}`);
+
     // Update performance stats
     const updateTime = performance.now() - startTime;
     this.updatePerformanceStats(updateTime);
@@ -837,12 +839,19 @@ export default class CameraManager {
    * @param {number} bottom - Bottom bound
    */
   setBounds(left: number, right: number, top: number, bottom: number): void {
+    // Clamp bounds to prevent camera from going beyond the world limits
+    // But ensure the camera can still move within a reasonable range
+    const maxRight = Math.max(right - this.viewportWidth, 0);
+    const maxBottom = Math.max(bottom - this.viewportHeight, 0);
+    
     this.bounds = {
       left: Math.max(0, left),
-      right: Math.min(this.levelWidth - this.viewportWidth, right),
+      right: maxRight,
       top: Math.max(0, top),
-      bottom: Math.min(this.levelHeight - this.viewportHeight, bottom),
+      bottom: maxBottom,
     };
+    
+    debug("CameraManager", `Bounds set to: ${this.bounds.left}-${this.bounds.right} x ${this.bounds.top}-${this.bounds.bottom}`);
   }
 
   /**
@@ -861,9 +870,11 @@ export default class CameraManager {
     // Reset effects
     this.resetEffects();
 
-    // Calculate reset position
-    const sourceX = player.initialX ?? player.initialPos?.x ?? player.x ?? 0;
-    const sourceY = player.initialY ?? player.initialPos?.y ?? player.y ?? 0;
+    // Calculate reset position (convert from block coordinates to pixel coordinates)
+    const blockX = player.initialX ?? player.initialPos?.x ?? player.x ?? 0;
+    const blockY = player.initialY ?? player.initialPos?.y ?? player.y ?? 0;
+    const sourceX = blockX * window.blockSize; // Convert blocks to pixels
+    const sourceY = blockY * window.blockSize; // Convert blocks to pixels
     const resetX = sourceX - this.viewportWidth / 2;
     const resetY = sourceY - this.viewportHeight / 2;
 

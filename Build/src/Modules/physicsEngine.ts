@@ -19,7 +19,7 @@ import { debug, verbose } from "./logManager";
 const PHYSICS_CONSTANTS = {
   GRAVITY: 0.0005,
   MAX_FALL_SPEED: 10,
-  MOVE_SPEED: 2,
+  MOVE_SPEED: 0.1,  // pixels/ms: ~3.2 blocks/sec at 32px/block
   JUMP_FORCE: -8,
   DOUBLE_JUMP_FORCE: -9,
   JUMP_BUFFER_TIME: 200,
@@ -417,7 +417,7 @@ class PhysicsEngine {
         this
       );
     this.player.physicsEngine = this;
-    this.groundLevel = this.levelHeight - 0.5;
+    this.groundLevel = this.levelHeight + 0.5; // Floor top surface position
     this.engine = Engine.create({ gravity: { y: PHYSICS_CONSTANTS.GRAVITY } });
 
     this.playerBody = Bodies.rectangle(
@@ -457,6 +457,12 @@ class PhysicsEngine {
       }
     );
     World.add(this.engine.world, this.floorBody);
+    // Debug: log floor creation and collision filter so we can verify it exists and will interact with the player
+    verbose("physicsEngine", "Floor added to world", {
+      position: this.floorBody.position,
+      bounds: { width: this.levelWidth, height: 1 },
+      collisionFilter: (this.floorBody as any).collisionFilter,
+    });
 
     this.blockBodies = [];
     this.initializeLevelBlocks();
@@ -537,16 +543,22 @@ class PhysicsEngine {
     this._eventListeners = {};
   }
 
-  update() {
+  update(deltaTimeMs?: number) {
     if (this.isPaused || !this.playerBody) return;
     const currentTime = Date.now();
-    // Compute deltaTime (ms) with a safe clamp to avoid large steps
-    let deltaTime = currentTime - (this.lastUpdateTime || currentTime);
+    
+    // Use provided deltaTime or calculate it
+    let deltaTime = deltaTimeMs !== undefined ? deltaTimeMs : (currentTime - (this.lastUpdateTime || currentTime));
     deltaTime = Math.min(deltaTime || 16.67, 16.67);
     this.lastUpdateTime = currentTime;
 
     if (this.isDead) {
       this.handleDeath();
+      return;
+    }
+
+    // Stop physics updates when level is complete
+    if (this.isComplete) {
       return;
     }
 
@@ -557,6 +569,23 @@ class PhysicsEngine {
     // Basic validation of player position and velocity
     const pos = this.playerBody.position;
     const vel = this.playerBody.velocity;
+
+    // Safety: detect runaway velocities/positions (numeric explosion) and reset
+    if (Math.abs(vel.x) > 1e5 || Math.abs(vel.y) > 1e5) {
+      debug(
+        "physicsEngine",
+        "Runaway velocity detected, resetting player",
+        { pos, vel }
+      );
+      Body.setPosition(this.playerBody, this.player.initialPos);
+      Body.setVelocity(this.playerBody, { x: 0, y: 0 });
+      this.player.isOnPlatform = true;
+      this.player.isJumping = false;
+      this.player.jumpsRemaining = 2;
+      this.player.doubleJumpAvailable = true;
+      this.player.lastGroundedTime = currentTime;
+      return;
+    }
 
     if (
       !isFinite(pos.x) ||
@@ -583,9 +612,15 @@ class PhysicsEngine {
     const minX = 0.5;
     const maxX = this.levelWidth - 0.5;
     const minY = 0.5;
-    const maxY = this.groundLevel;
+    const maxY = this.groundLevel; // Floor top surface
+    const EPSILON = 0.001; // Tolerance for floating-point precision
 
-    if (pos.x < minX || pos.x > maxX || pos.y < minY || pos.y > maxY) {
+    if (
+      pos.x < minX - EPSILON ||
+      pos.x > maxX + EPSILON ||
+      pos.y < minY - EPSILON ||
+      pos.y > maxY + EPSILON
+    ) {
       debug(
         "physicsEngine",
         `Player out of bounds at {x: ${pos.x}, y: ${pos.y}}, bounds are ${minX}-${maxX} x ${minY}-${maxY}`
@@ -706,8 +741,11 @@ class PhysicsEngine {
     }
 
     // Determine if player is out of bounds
-    const isOutOfBoundsX = pos.x < 0.5 || pos.x > this.levelWidth - 0.5;
-    const isOutOfBoundsY = pos.y < 0.5 || pos.y > this.groundLevel;
+    const EPSILON = 0.001; // Tolerance for floating-point precision
+    const isOutOfBoundsX =
+      pos.x < 0.5 - EPSILON || pos.x > this.levelWidth - 0.5 + EPSILON;
+    const isOutOfBoundsY =
+      pos.y < 0.5 - EPSILON || pos.y > this.groundLevel + EPSILON;
 
     if (isOutOfBoundsX || isOutOfBoundsY) {
       // Clamp position
@@ -816,6 +854,13 @@ class PhysicsEngine {
 
     for (const pair of event.pairs) {
       const { bodyA, bodyB } = pair;
+      // Debug: report if this pair involves the floor to help diagnose missed collisions
+      if (bodyA.label === "floor" || bodyB.label === "floor") {
+        verbose("physicsEngine", "Collision pair includes floor", {
+          a: { label: bodyA.label, pos: bodyA.position },
+          b: { label: bodyB.label, pos: bodyB.position },
+        });
+      }
       const playerBody =
         bodyA.label === "player"
           ? bodyA
@@ -1022,7 +1067,7 @@ class PhysicsEngine {
     this.levelMatrix = newMatrix;
     this.levelWidth = newMatrix[0].length;
     this.levelHeight = newMatrix.length;
-    this.groundLevel = this.levelHeight - 0.5;
+    this.groundLevel = this.levelHeight + 0.5; // Floor top surface position
     this.initializeLevelBlocks();
     // also reposition the floor
     if (this.floorBody) {
