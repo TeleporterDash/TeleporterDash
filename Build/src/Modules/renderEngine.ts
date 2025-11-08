@@ -28,8 +28,6 @@ import {
 } from "pixi.js";
 import type { IDestroyOptions } from "@pixi/display";
 
-setLogLevel("debug");
-
 type RenderTickerCallback = (delta: number) => void;
 
 export class RenderEngine {
@@ -221,6 +219,10 @@ export class RenderEngine {
    * @param {Map<string, any>} spriteMap - Sprite map
    */
   async renderMatrix(matrix: any[][], spriteMap: SpriteMap): Promise<void> {
+    console.warn(
+      "[renderEngine] renderMatrix called! This will destroy all sprites. Stack trace:"
+    );
+    console.trace();
     this.matrix = matrix;
     this.spriteMap = spriteMap;
     this.blockSprites = this.cleanupSprites(this.blockSprites, {
@@ -443,8 +445,18 @@ export class RenderEngine {
     };
     this.floorSprite.x =
       ((window as any).cameraManager.x || 0) - this.pixiApp.screen.width * 2;
-    this.floorSprite.y =
-      this.pixiApp.screen.height + this.blockSize * FLOOR_CONFIG.Y_OFFSET;
+
+    // Calculate floor Y position in world coordinates
+    // The floor should be positioned at the bottom of the level (matrix height + floor space)
+    const matrix = this.matrix || (window as any).parsedMatrix;
+    if (matrix && matrix.length > 0) {
+      // Floor should be at level height (in pixels) plus a bit of space
+      this.floorSprite.y = (matrix.length + 1.5) * this.blockSize;
+    } else {
+      // Fallback if no matrix
+      this.floorSprite.y =
+        this.pixiApp.screen.height + this.blockSize * FLOOR_CONFIG.Y_OFFSET;
+    }
   }
 
   /**
@@ -505,24 +517,57 @@ export class RenderEngine {
     debug("renderEngine", "Setting player sprite properties...");
     this.playerSprite.zIndex = 10000;
     const spriteSize = 30;
-    debug("renderEngine", `Player sprite initial size: ${this.playerSprite.width} x ${this.playerSprite.height}`);
+    debug(
+      "renderEngine",
+      `Player sprite initial size: ${this.playerSprite.width} x ${this.playerSprite.height}`
+    );
     this.playerSprite.scale.set(this.blockSize / spriteSize);
-    debug("renderEngine", `Player sprite scale: x=${this.playerSprite.scale.x}, y=${this.playerSprite.scale.y}, width=${this.playerSprite.width}, height=${this.playerSprite.height}`);
-    debug("renderEngine", `Player sprite texture: ${this.playerSprite.texture?.baseTexture?.toString()}`);
+    debug(
+      "renderEngine",
+      `Player sprite scale: x=${this.playerSprite.scale.x}, y=${this.playerSprite.scale.y}, width=${this.playerSprite.width}, height=${this.playerSprite.height}`
+    );
+    debug(
+      "renderEngine",
+      `Player sprite texture: ${this.playerSprite.texture?.baseTexture?.toString()}`
+    );
     this.setSpriteTransform(this.playerSprite, player, {
       xOffset: 0.5,
       yOffset: 0.75,
     });
-    debug("renderEngine", `Player sprite position set to: x=${this.playerSprite.x}, y=${this.playerSprite.y}, anchor=${this.playerSprite.anchor.x},${this.playerSprite.anchor.y}`);
+    debug(
+      "renderEngine",
+      `Player sprite position set to: x=${this.playerSprite.x}, y=${this.playerSprite.y}, anchor=${this.playerSprite.anchor.x},${this.playerSprite.anchor.y}`
+    );
     debug("renderEngine", `Player data: x=${player.x}, y=${player.y}`);
-    debug("renderEngine", `Container offset: x=${this.container.x}, y=${this.container.y}`);
-    debug("renderEngine", `Effective screen position: x=${this.playerSprite.x + this.container.x}, y=${this.playerSprite.y + this.container.y}`);
-    debug("renderEngine", `Canvas dimensions: ${this.pixiApp.screen.width}x${this.pixiApp.screen.height}`);
+    debug(
+      "renderEngine",
+      `Container offset: x=${this.container.x}, y=${this.container.y}`
+    );
+    debug(
+      "renderEngine",
+      `Effective screen position: x=${
+        this.playerSprite.x + this.container.x
+      }, y=${this.playerSprite.y + this.container.y}`
+    );
+    debug(
+      "renderEngine",
+      `Canvas dimensions: ${this.pixiApp.screen.width}x${this.pixiApp.screen.height}`
+    );
     debug("renderEngine", "Adding player sprite to container...");
     this.container.addChild(this.playerSprite);
-    debug("renderEngine", `Player sprite parent: ${this.playerSprite.parent?.constructor.name}`);
-    debug("renderEngine", `Container children count: ${this.container.children.length}`);
-    debug("renderEngine", `Player sprite visible: ${this.playerSprite.visible}, alpha: ${this.playerSprite.alpha}`);
+
+    debug(
+      "renderEngine",
+      `Player sprite parent: ${this.playerSprite.parent?.constructor.name}`
+    );
+    debug(
+      "renderEngine",
+      `Container children count: ${this.container.children.length}`
+    );
+    debug(
+      "renderEngine",
+      `Player sprite visible: ${this.playerSprite.visible}, alpha: ${this.playerSprite.alpha}`
+    );
     debug("renderEngine", "Player sprite rendered successfully");
     verbose(
       "renderEngine",
@@ -531,71 +576,126 @@ export class RenderEngine {
   }
 
   /**
-   * Start the game loop
+   * Start visual update loop (for animations, particles, etc.)
+   * Game logic updates are handled by the GameLoop, not here!
    * @param {any} player - Player instance
    * @param {any} physics - Physics engine
    */
   startGameLoop(player: any, physics: any): void {
-    this.tickerCallback = (delta: number): void => {
-      // Use timeManager to get consistent deltaTime in SECONDS
-      // Pass current time to timeManager to ensure consistent timing
-      const currentTime = performance.now();
-      const deltaTimeSeconds = timeManager.update(currentTime);
-      const deltaTimeMs = deltaTimeSeconds * 1000;
+    // Don't use PixiJS ticker - GameLoop handles everything now
+    // Just store references for death/completion detection
+    (this as any)._physics = physics;
 
-      verbose("renderEngine", "Ticker running, deltaTime:", deltaTimeSeconds, "seconds");
-      physics.update(deltaTimeMs);
-      this.updatePlayerPosition(player, player.rotation);
-      if (!this.isPaused) {
-        updateVisualEffects(this.blockSprites, deltaTimeSeconds);
-        map(this.blockSprites, (sprite: Sprite) => {
-          const effectType = (sprite as any).blockData?.appearance?.effectType;
-          if (effectType && effectType !== "none") {
-            const intensity =
-              Number.parseFloat(
-                (sprite as any).blockData.appearance.effectIntensity
-              ) || 1;
-            this.particleSystem.emit(sprite, effectType, intensity);
-          }
-        });
-      }
-      if ((window as any).cameraManager && player) {
-        const playerX = player.x * this.blockSize;
-        const playerY = player.y * this.blockSize;
-        (window as any).cameraManager.follow(
-          { x: playerX, y: playerY },
-          0,
-          -this.pixiApp.canvas.height * 0.2
-        );
-        (window as any).cameraManager.update();
-      }
-      if (this.isFloorInitialized) {
-        this.updateFloorPosition();
-        verbose(
-          "renderEngine",
-          "Updated floor position:",
-          this.floorSprite!.x,
-          this.floorSprite!.y
-        );
-      }
-      if (!this.matrix || !this.blockSprites) {
-        warn(
-          "renderEngine",
-          "Cannot update animations: matrix or sprites not initialized"
-        );
-        return;
-      }
+    debug("renderEngine", "Visual system ready (using GameLoop for updates)");
+    debug(
+      "renderEngine",
+      `Container visible: ${this.container.visible}, alpha: ${this.container.alpha}`
+    );
+    debug(
+      "renderEngine",
+      `Player sprite exists: ${!!this.playerSprite}, visible: ${
+        this.playerSprite?.visible
+      }, alpha: ${this.playerSprite?.alpha}`
+    );
+  }
+
+  /**
+   * Update player sprite position and rotation
+   * This is called by the game loop, not the ticker!
+   * @param {any} player - Player instance
+   * @param {number} rotation - Rotation in degrees
+   */
+  updatePlayerPosition(player: any, rotation?: number): void {
+    if (!this.playerSprite) {
+      debug(
+        "renderEngine",
+        "Cannot update player position: playerSprite is null"
+      );
+      return;
+    }
+    const rawX = typeof player?.x === "number" ? player.x : Number(player?.x);
+    const rawY = typeof player?.y === "number" ? player.y : Number(player?.y);
+    const playerX = Number.isFinite(rawX) ? rawX : 0;
+    const playerY = Number.isFinite(rawY) ? rawY : 0;
+    const playerRotation =
+      typeof rotation === "number" ? rotation : player?.rotation ?? 0;
+    const facing = player?.facing ?? 1;
+    this.setSpriteTransform(
+      this.playerSprite,
+      {
+        x: playerX,
+        y: playerY,
+        rotation: playerRotation,
+        facing,
+      },
+      { xOffset: 0.5, yOffset: 0.75 }
+    );
+    verbose(
+      "renderEngine",
+      `Player position updated: block coords (${playerX.toFixed(
+        2
+      )}, ${playerY.toFixed(
+        2
+      )}), sprite world pos (${this.playerSprite.x.toFixed(
+        0
+      )}, ${this.playerSprite.y.toFixed(0)}), screen pos (${(
+        this.playerSprite.x + this.container.x
+      ).toFixed(0)}, ${(this.playerSprite.y + this.container.y).toFixed(
+        0
+      )}), visible=${this.playerSprite.visible}`
+    );
+  }
+
+  /**
+   * Add method for updating visuals (called by GameLoop)
+   * @param {number} deltaTimeMs - Delta time in milliseconds
+   */
+  updateVisuals(deltaTimeMs: number): void {
+    const deltaTimeSeconds = deltaTimeMs / 1000;
+    const physics = (this as any)._physics;
+
+    if (!this.isPaused) {
+      // Update visual effects
+      updateVisualEffects(this.blockSprites, deltaTimeSeconds);
+
+      // Emit particles for active effects
+      map(this.blockSprites, (sprite: Sprite) => {
+        const effectType = (sprite as any).blockData?.appearance?.effectType;
+        if (effectType && effectType !== "none") {
+          const intensity =
+            Number.parseFloat(
+              (sprite as any).blockData.appearance.effectIntensity
+            ) || 1;
+          this.particleSystem.emit(sprite, effectType, intensity);
+        }
+      });
+    }
+
+    // Update floor position to follow camera
+    if (this.isFloorInitialized) {
+      this.updateFloorPosition();
+    }
+
+    // Update animations
+    if (this.matrix && this.blockSprites) {
       try {
-        updateAnimations(this.matrix, delta, this.blockSprites);
+        // Convert ms to frames for compatibility with existing animation system
+        const deltaFrames = deltaTimeSeconds * 60;
+        updateAnimations(this.matrix, deltaFrames, this.blockSprites);
       } catch (err) {
         error("renderEngine", "Error updating animations:", err);
       }
+    }
+
+    // Check for death/completion
+    if (physics) {
       if (physics.isDead && !this.wasDead) {
         debug("renderEngine", "Player died!");
         this.wasDead = true;
       } else if (!physics.isDead) {
         this.wasDead = false;
       }
+
       if (physics.isComplete && !this.isLevelComplete) {
         debug(
           "renderEngine",
@@ -603,37 +703,7 @@ export class RenderEngine {
         );
         this.handleLevelComplete();
       }
-    };
-    if (this.tickerCallback) {
-      this.pixiApp.ticker.add(
-        this.tickerCallback as unknown as TickerCallback<any>,
-        this
-      );
     }
-    debug("renderEngine", "Game loop started");
-    debug("renderEngine", `Container visible: ${this.container.visible}, alpha: ${this.container.alpha}`);
-    debug("renderEngine", `Player sprite exists: ${!!this.playerSprite}, visible: ${this.playerSprite?.visible}, alpha: ${this.playerSprite?.alpha}`);
-  }
-
-  /**
-   * Update player sprite position and rotation
-   * @param {any} player - Player instance
-   * @param {number} rotation - Rotation in degrees
-   */
-  updatePlayerPosition(player: any, rotation?: number): void {
-    if (!this.playerSprite) {
-      debug("renderEngine", "Cannot update player position: playerSprite is null");
-      return;
-    }
-    this.setSpriteTransform(
-      this.playerSprite,
-      { ...player, rotation },
-      { xOffset: 0.5, yOffset: 0.75 }
-    );
-    verbose(
-      "renderEngine",
-      `Player position updated: block coords (${player.x.toFixed(2)}, ${player.y.toFixed(2)}), sprite world pos (${this.playerSprite.x.toFixed(0)}, ${this.playerSprite.y.toFixed(0)}), screen pos (${(this.playerSprite.x + this.container.x).toFixed(0)}, ${(this.playerSprite.y + this.container.y).toFixed(0)}), visible=${this.playerSprite.visible}`
-    );
   }
 
   /**

@@ -22,6 +22,7 @@ import {
   Filter,
   TextureSourceLike,
 } from "pixi.js";
+import * as PIXI from "pixi.js";
 import "pixi.js/advanced-blend-modes";
 
 type Timeline = ReturnType<typeof gsap.timeline>;
@@ -124,6 +125,7 @@ const getCoordinate = (value: unknown): number =>
 
 // Register GSAP PIXI plugin
 gsap.registerPlugin(PixiPlugin);
+PixiPlugin.registerPIXI(PIXI);
 
 /**
  * @fileoverview Unified visual effects engine for PIXI.js applications
@@ -136,7 +138,7 @@ gsap.registerPlugin(PixiPlugin);
 // ========================================================================
 
 /**
- * Enhanced particle effect configurations with GSAP easing
+ * particle effect configurations with GSAP easing
  * @type {Object}
  */
 const PARTICLE_CONFIGS = Object.freeze({
@@ -188,7 +190,7 @@ const PARTICLE_CONFIGS = Object.freeze({
 } satisfies Record<ParticleType, ParticleConfig>);
 
 /**
- * Enhanced distortion effect configurations
+ * distortion effect configurations
  * @type {Object}
  */
 const DISTORTION_CONFIGS = Object.freeze({
@@ -347,7 +349,7 @@ function getRandomColor(
 }
 
 // ========================================================================
-// Enhanced Distortion System
+// Distortion System
 // ========================================================================
 
 /**
@@ -363,7 +365,7 @@ export class DistortionSystem {
   private originalFilters: Filter[] = [];
 
   constructor(
-  sprite: DistortionAwareSprite,
+    sprite: DistortionAwareSprite,
     type: DistortionType | string,
     intensity: number = 1
   ) {
@@ -634,7 +636,7 @@ export class DistortionSystem {
 }
 
 // ========================================================================
-// Enhanced Particle System
+// Particle System
 // ========================================================================
 
 /**
@@ -877,14 +879,11 @@ export class ParticleSystem {
   }
 
   /**
-   * Create explosion effect with enhanced visuals
+   * Create explosion effect with visuals
    * @param {Sprite|Object} target - Target sprite or position
    * @param {Object} options - Explosion options
    */
-  createExplosion(
-    target: ExplosionTarget,
-    options: ExplosionOptions = {}
-  ) {
+  createExplosion(target: ExplosionTarget, options: ExplosionOptions = {}) {
     const {
       color = "#ff6600",
       count = 20,
@@ -1045,14 +1044,14 @@ export class ParticleSystem {
       this.container.parent.removeChild(this.container);
     }
 
-  this.container.destroy({ children: true });
+    this.container.destroy({ children: true });
 
     debug("visualEffectsEngine", "Particle system cleanup complete");
   }
 }
 
 // ========================================================================
-// Enhanced Effect Manager
+// Effect Manager
 // ========================================================================
 
 /**

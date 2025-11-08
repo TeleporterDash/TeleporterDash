@@ -18,13 +18,14 @@ import { pregenerateTextures } from "./Modules/animationEngine";
 import CameraManager from "./Modules/cameraManager";
 import musicSync, { MusicSync } from "./Modules/musicSync";
 import { Application, WebGLRenderer, VERSION } from "pixi.js";
+import { gameLoop } from "./Modules/gameLoop";
 
 // Create global instances
 window.audioManager = new AudioManager();
 window.autoRestart = true; // Default to auto restart
 
 // Now we can set the log level after importing it
-setLogLevel("debug");
+setLogLevel("verbose");
 
 // Global variables (all initialized through window object)
 window.pixiApp = null;
@@ -180,13 +181,8 @@ async function initializeGameFromMatrix(): Promise<void> {
     activeRenderEngine.spriteMap = spriteMap;
     await activeRenderEngine.renderMatrix(parsedMatrix, spriteMap);
 
-    if (
-      !activeRenderEngine.floorSprite ||
-      !activeRenderEngine.floorSprite.parent
-    ) {
-      debug("gameTest", "Floor sprite not found, rendering floor...");
-      activeRenderEngine.renderFloor();
-    }
+    // renderMatrix() now handles floor rendering, so we don't need to check here
+    // Floor should already exist after renderMatrix completes
 
     let cameraManager = window.cameraManager;
     if (!cameraManager) {
@@ -207,35 +203,12 @@ async function initializeGameFromMatrix(): Promise<void> {
       );
     }
 
-    const floorY = parsedMatrix.length * window.blockSize;
-    cameraManager.setPosition(
-      0,
-      Math.max(0, floorY - pixiApp.canvas.height + window.blockSize)
-    );
-
     const originalTickerCallback = activeRenderEngine.tickerCallback;
     activeRenderEngine.tickerCallback = (delta: number) => {
       if (originalTickerCallback) {
         originalTickerCallback(delta);
       }
-
-      const currentCameraManager = window.cameraManager;
-      if (
-        currentCameraManager &&
-        window.player &&
-        typeof window.player.x === "number" &&
-        typeof window.player.y === "number"
-      ) {
-        const playerX = window.player.x * window.blockSize;
-        const playerY = window.player.y * window.blockSize;
-        const verticalOffset = -pixiApp.canvas.height * 0.2;
-        currentCameraManager.follow(
-          { x: playerX, y: playerY },
-          0,
-          verticalOffset
-        );
-        currentCameraManager.update();
-      }
+      // Camera update is now handled inside the renderEngine game loop
     };
 
     const audioManagerAdapter: AudioManagerLike = {
@@ -286,21 +259,8 @@ async function initializeGameFromMatrix(): Promise<void> {
       },
     };
 
-    if (!window.physicsEngine) {
-      window.physicsEngine = new PhysicsEngine(
-        parsedMatrix,
-        window.player ?? undefined,
-        activeRenderEngine,
-        audioManagerAdapter,
-        cameraManager
-      );
-    } else {
-      window.physicsEngine.updateMatrix(parsedMatrix);
-    }
-
-    // Only initialize player if it doesn't exist
+    // IMPORTANT: Create player BEFORE physics engine so physics can use the correct player position
     if (!window.player) {
-      // Start the player at the bottom left of the level
       const startX = 1; // One block in from the left
       const startY = parsedMatrix.length - 2; // Two blocks up from the bottom
       debug(
@@ -312,11 +272,26 @@ async function initializeGameFromMatrix(): Promise<void> {
         startY,
         parsedMatrix[0].length,
         parsedMatrix.length,
-        window.physicsEngine
+        null // Physics engine doesn't exist yet
       );
       window.player.renderEngine = activeRenderEngine;
     }
 
+    if (!window.physicsEngine) {
+      window.physicsEngine = new PhysicsEngine(
+        parsedMatrix,
+        window.player, // Now player exists!
+        activeRenderEngine,
+        audioManagerAdapter,
+        cameraManager
+      );
+      // Link player to physics engine
+      window.player.physicsEngine = window.physicsEngine;
+    } else {
+      window.physicsEngine.updateMatrix(parsedMatrix);
+    }
+
+    // Render the player sprite BEFORE starting the game loop
     if (window.physicsEngine && !activeRenderEngine.playerSprite) {
       try {
         console.log("[main] About to render player at position:", window.player.x, window.player.y);
@@ -327,9 +302,28 @@ async function initializeGameFromMatrix(): Promise<void> {
       }
     }
 
+    // NOW set camera position based on player position (after player sprite exists)
+    const playerPixelX = window.player.x * window.blockSize;
+    const playerPixelY = window.player.y * window.blockSize;
+    const cameraStartX = playerPixelX - pixiApp.canvas.width / 2;
+    const cameraStartY = playerPixelY - pixiApp.canvas.height / 2;
+    cameraManager.setPosition(cameraStartX, cameraStartY);
+
     // Only start game loop if it hasn't been started
     if (!window.gameStarted) {
+      // Start the visual ticker for animations
       activeRenderEngine.startGameLoop(window.player, window.physicsEngine);
+      
+      // Register systems with the new unified game loop
+      gameLoop.registerSystems({
+        physics: window.physicsEngine,
+        renderer: activeRenderEngine,
+        camera: cameraManager,
+      });
+      
+      // Start the unified game loop
+      gameLoop.start();
+      
       window.gameStarted = true;
     }
 
@@ -406,16 +400,14 @@ async function restartGame(): Promise<void> {
     gameOverScreen.style.display = "none";
   }
 
+  // PAUSE the game loop during restart to prevent updates while sprites are being recreated
+  gameLoop.pause();
+
   // 1. Reset visual effects first
   if (window.renderEngine) {
     // Reset any active visual effects
     if (window.renderEngine.particleSystem) {
       window.renderEngine.particleSystem.reset();
-    }
-
-    // Reset camera effects
-    if (window.cameraManager) {
-      window.cameraManager.resetEffects();
     }
   }
 
@@ -424,12 +416,14 @@ async function restartGame(): Promise<void> {
     window.player.reset();
   } else {
     console.error("Player not found during restart!");
+    gameLoop.resume();
     return; // Cannot proceed without player
   }
 
-  // 3. Reset Render Engine (clears sprites, etc.)
-  if (window.renderEngine) {
-    window.renderEngine.reset();
+  // 3. Reset Physics (must be before rendering so player body position is correct)
+  if (window.physicsEngine) {
+    verbose("gameTest", "Resetting physics engine...");
+    window.physicsEngine.reset();
   }
 
   // 4. Reset audio
@@ -442,40 +436,26 @@ async function restartGame(): Promise<void> {
     window.musicSync.reset();
   }
 
-  // 5. Reset Camera and Physics (recenters on player start)
-  if (window.cameraManager) {
-    window.cameraManager.reset(window.player); // Pass player for initial position
-  }
-
-  if (window.physicsEngine) {
-    verbose("gameTest", "Resetting physics engine...");
-    window.physicsEngine.reset();
-  }
-
-  // 6. Re-render the current matrix and player
+  // 5. Re-render EVERYTHING (level + player)
   if (window.renderEngine && window.parsedMatrix && window.spriteMap) {
     try {
-      // Re-render the static parts of the level
+      // Reset render engine (this clears all sprites including player)
+      window.renderEngine.reset();
+      
+      // Re-render the level
       await window.renderEngine.renderMatrix(
         window.parsedMatrix,
         window.spriteMap
       );
 
-      // Reset player sprite
-      if (window.renderEngine.playerSprite) {
-        if (window.renderEngine.playerSprite.parent) {
-          window.renderEngine.playerSprite.parent.removeChild(
-            window.renderEngine.playerSprite
-          );
-        }
-        window.renderEngine.playerSprite.destroy();
-        window.renderEngine.playerSprite = null;
+      // Re-render the player sprite
+      await window.renderEngine.renderPlayer(window.player);
+      
+      // 6. Reset Camera AFTER player sprite is recreated
+      if (window.cameraManager) {
+        window.cameraManager.reset(window.player);
       }
-      await window.renderEngine.renderPlayer(window.player); // Removed spriteMap parameter since it's now stored in renderEngine
-      // Restart the game loop within RenderEngine ONLY if not already running
-      if (!window.renderEngine.tickerCallback) {
-        window.renderEngine.startGameLoop(window.player, window.physicsEngine);
-      }
+      
     } catch (error) {
       console.error("Error during game restart rendering:", error);
     }
@@ -486,6 +466,9 @@ async function restartGame(): Promise<void> {
   }
 
   console.log("Game restart complete.");
+  
+  // RESUME the game loop now that everything is recreated
+  gameLoop.resume();
 }
 
 function togglePause(): void {
@@ -505,6 +488,13 @@ function togglePause(): void {
   ) as HTMLButtonElement;
   if (mainPauseButton) {
     mainPauseButton.textContent = window.isPaused ? "Resume" : "Pause";
+  }
+
+  // Use the unified game loop for pause/resume
+  if (window.isPaused) {
+    gameLoop.pause();
+  } else {
+    gameLoop.resume();
   }
 
   // Pause/Resume the background music
@@ -688,9 +678,11 @@ window.togglePause = function (): void {
     pauseMenu.style.display = window.isPaused ? "block" : "none";
   }
 
-  // Update render engine pause state
-  if (window.renderEngine) {
-    window.renderEngine.isPaused = window.isPaused;
+  // Use the unified game loop for pause/resume
+  if (window.isPaused) {
+    gameLoop.pause();
+  } else {
+    gameLoop.resume();
   }
 
   // Update audio state
@@ -700,11 +692,6 @@ window.togglePause = function (): void {
     } else {
       window.audioManager.playBackgroundMusic();
     }
-  }
-
-  // Update physics engine pause state
-  if (window.physicsEngine) {
-    window.physicsEngine.isPaused = window.isPaused;
   }
 
   // Update particle system pause state

@@ -98,18 +98,20 @@ class TimeManager {
     const rawDelta = (currentTime - (this.lastTime || currentTime)) / 1000;
     this.lastTime = currentTime;
 
+    // If paused, return 0 delta time
+    if (this.paused) {
+      return 0;
+    }
+
     // Apply time scale and cap max delta to prevent spiral of death
     this.deltaTime = Math.min(rawDelta * this.timeScale, 0.25);
-    this.scaledDelta = this.deltaTime * this.timeScale;
 
     // Update performance metrics
     this.updatePerformanceMetrics(rawDelta);
 
     // Update fixed timestep accumulator
-    if (!this.paused) {
-      this.accumulator += this.deltaTime;
-      this.totalTime += this.deltaTime;
-    }
+    this.accumulator += this.deltaTime;
+    this.totalTime += this.deltaTime;
 
     // Update frame count and FPS
     this.frameCount++;

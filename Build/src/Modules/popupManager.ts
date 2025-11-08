@@ -2,8 +2,6 @@ import { html, render, type TemplateResult } from "lit-html";
 import { warn, debug, setLogLevel } from "./logManager";
 import "../CSS/popupManager.css";
 
-setLogLevel("debug");
-
 interface PopupManagerOptions {
   achievementIconPath?: string;
 }

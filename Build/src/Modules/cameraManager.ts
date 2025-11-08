@@ -100,8 +100,6 @@ interface CameraEffects {
   focus: { target: FollowTarget | null; strength: number; radius: number };
 }
 
-setLogLevel("debug");
-
 /**
  * Enhanced CameraManager
  * Handles camera movement, tracking, and effects for the game
@@ -169,7 +167,7 @@ export default class CameraManager {
     this.adaptiveSmoothing = true; // Enable adaptive smoothing based on movement speed
     this.maxSmoothingSpeed = 500; // Pixels per second threshold for max smoothing
     this.minSmoothingFactor = 0.02;
-    this.maxSmoothingFactor = 0.3;
+    this.maxSmoothingFactor = 0.1;
 
     // Dead zone configuration
     this.deadZoneThreshold = 0.05;
@@ -178,13 +176,13 @@ export default class CameraManager {
     this.maxDeadZone = 0.15;
 
     // Predictive tracking
-    this.predictiveTracking = true;
+    this.predictiveTracking = false;
     this.predictionStrength = 0.3;
     this.velocityHistory = [];
     this.maxVelocityHistory = 5;
 
     // Look-ahead configuration
-    this.lookAhead = true;
+    this.lookAhead = false;
     this.lookAheadDistance = 100;
     this.lookAheadSmoothing = 0.1;
 
@@ -517,18 +515,7 @@ export default class CameraManager {
    * @param {number} deltaTime - Time since last update in milliseconds
    */
   update(deltaTime: number = 16): void {
-    const currentTime = Date.now();
-
-    // Throttle updates for performance
-    if (
-      currentTime - this.lastUpdateTime < this.updateThrottle &&
-      !this.isDirty
-    ) {
-      return;
-    }
-
     const startTime = performance.now();
-    this.lastUpdateTime = currentTime;
 
     // Calculate adaptive smoothing based on movement speed
     const targetSpeed = Math.sqrt(
@@ -580,7 +567,7 @@ export default class CameraManager {
 
     // Apply drift effect if enabled
     if (this.effects.drift.enabled) {
-      const time = currentTime / 1000;
+      const time = performance.now() / 1000;
       nextX +=
         Math.sin(time * this.effects.drift.speed) *
         this.effects.drift.amplitude;
@@ -590,6 +577,11 @@ export default class CameraManager {
         0.5;
     }
 
+    // Limit movement per frame to prevent insane jumps
+    const maxMove = 100; // pixels per frame
+    nextX = this.x + _.clamp(nextX - this.x, -maxMove, maxMove);
+    nextY = this.y + _.clamp(nextY - this.y, -maxMove, maxMove);
+
     // Clamp position within bounds
     this.x = _.clamp(nextX, this.bounds.left, this.bounds.right);
     this.y = _.clamp(nextY, this.bounds.top, this.bounds.bottom);
@@ -597,8 +589,6 @@ export default class CameraManager {
     // Apply position to container
     this.container.x = -this.x;
     this.container.y = -this.y;
-
-    debug("CameraManager", `Camera position: (${this.x.toFixed(2)}, ${this.y.toFixed(2)}), Container offset: (${this.container.x.toFixed(2)}, ${this.container.y.toFixed(2)}), Bounds: ${this.bounds.left}-${this.bounds.right} x ${this.bounds.top}-${this.bounds.bottom}`);
 
     // Update performance stats
     const updateTime = performance.now() - startTime;
@@ -870,13 +860,28 @@ export default class CameraManager {
     // Reset effects
     this.resetEffects();
 
-    // Calculate reset position (convert from block coordinates to pixel coordinates)
-    const blockX = player.initialX ?? player.initialPos?.x ?? player.x ?? 0;
-    const blockY = player.initialY ?? player.initialPos?.y ?? player.y ?? 0;
-    const sourceX = blockX * window.blockSize; // Convert blocks to pixels
-    const sourceY = blockY * window.blockSize; // Convert blocks to pixels
-    const resetX = sourceX - this.viewportWidth / 2;
-    const resetY = sourceY - this.viewportHeight / 2;
+    // Get player position - player.x/y are already in block coordinates
+    // We need to convert to pixel coordinates
+    const blockSize = (window as any).blockSize || 32;
+    let playerPixelX: number;
+    let playerPixelY: number;
+    
+    if ('initialPos' in player && player.initialPos) {
+      // initialPos is in physics coordinates (already has 0.5 offset)
+      playerPixelX = player.initialPos.x * blockSize;
+      playerPixelY = player.initialPos.y * blockSize;
+    } else if ('x' in player && 'y' in player && typeof player.x === 'number' && typeof player.y === 'number') {
+      // Current position
+      playerPixelX = player.x * blockSize;
+      playerPixelY = player.y * blockSize;
+    } else {
+      // Fallback to 0,0
+      playerPixelX = 0;
+      playerPixelY = 0;
+    }
+    
+    const resetX = playerPixelX - this.viewportWidth / 2;
+    const resetY = playerPixelY - this.viewportHeight / 2;
 
     if (smooth) {
       this.transitionTo(resetX, resetY, duration);

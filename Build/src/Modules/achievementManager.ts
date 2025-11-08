@@ -23,7 +23,6 @@ type SavedAchievementStore = Partial<
 >;
 
 export interface AchievementManagerOptions {
-  debugMode?: boolean;
   audioManager?: AudioManager;
   popupManager?: PopupManager;
   storageManager?: StorageManager;
@@ -50,7 +49,6 @@ export class AchievementManager {
   private readonly storageManager: StorageManager;
 
   constructor({
-    debugMode = false,
     audioManager,
     popupManager,
     storageManager = defaultStorageManager,
@@ -58,10 +56,6 @@ export class AchievementManager {
     this.audioManager = audioManager;
     this.popupManager = popupManager;
     this.storageManager = storageManager;
-
-    if (debugMode) {
-      setLogLevel("debug");
-    }
 
     void this.init();
   }

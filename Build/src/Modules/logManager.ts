@@ -19,6 +19,8 @@ const logTypes: Record<LogLevel, ConsoleMethod> = {
 
 type LevelState = Record<Exclude<LogLevel, "error/warning">, boolean>;
 
+const levelHierarchy: (keyof LevelState)[] = ['error', 'warning', 'info', 'debug', 'verbose'];
+
 const logLevels: LevelState = {
   debug: false,
   verbose: false,
@@ -32,7 +34,14 @@ const isKnownLevel = (level: string): level is keyof LevelState =>
 
 export function setLogLevel(level: LogLevel, enabled = true): void {
   if (isKnownLevel(level)) {
-    logLevels[level] = enabled;
+    const index = levelHierarchy.indexOf(level);
+    if (index !== -1) {
+      for (let i = 0; i < levelHierarchy.length; i++) {
+        logLevels[levelHierarchy[i]] = i <= index;
+      }
+    } else {
+      logLevels[level] = enabled;
+    }
     return;
   }
 

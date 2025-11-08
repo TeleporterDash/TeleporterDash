@@ -4,8 +4,6 @@ import { blendColors, hslToHex } from "./colorUtils";
 import { warn, verbose, setLogLevel } from "./logManager";
 import _ from "lodash";
 
-setLogLevel("debug");
-
 const textureCache = new Map();
 
 export function getTextureCache() {
