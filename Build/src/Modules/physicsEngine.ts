@@ -17,11 +17,11 @@ import Matter, {
 import { debug, verbose } from "./logManager";
 
 const PHYSICS_CONSTANTS = {
-  GRAVITY: 0.0005,
-  MAX_FALL_SPEED: 10,
+  GRAVITY: 0.5,
+  MAX_FALL_SPEED: 8,
   MOVE_SPEED: 0.1, // pixels/ms: ~3.2 blocks/sec at 32px/block
-  JUMP_FORCE: -8,
-  DOUBLE_JUMP_FORCE: -9,
+  JUMP_FORCE: -1,
+  DOUBLE_JUMP_FORCE: -2,
   JUMP_BUFFER_TIME: 200,
   COYOTE_TIME: 200,
   LANE_SWITCH_DELAY: 150,
@@ -198,16 +198,16 @@ class Player {
     this.levelHeight = levelHeight;
     this.physicsEngine = physicsEngine || null;
     this.lanePositions = [levelHeight / 4, levelHeight / 2, levelHeight - 0.75];
-    // sensible defaults
+    // sensible defaults (just kidding they're not)
     this.mode = "classic";
     this.lane = 1;
     this.isFreeMoving = false;
     this.teleportCooldown = 0;
     this.score = 0;
-    this.jumpsRemaining = 2;
+    this.jumpsRemaining = 0;
     this.isJumping = false;
     this.isOnPlatform = false;
-    this.doubleJumpAvailable = true;
+    this.doubleJumpAvailable = false;
     this.lastGroundedTime = Date.now();
     this.facing = 1;
     this.rotation = 0;
@@ -227,10 +227,10 @@ class Player {
     this.isFreeMoving = false;
     this.teleportCooldown = 0;
     this.score = 0;
-    this.jumpsRemaining = 2;
+    this.jumpsRemaining = 0;
     this.isJumping = false;
     this.isOnPlatform = false;
-    this.doubleJumpAvailable = true;
+    this.doubleJumpAvailable = false;
     this.lastGroundedTime = Date.now();
     this.facing = 1;
     this.rotation = 0;
@@ -296,7 +296,7 @@ class Player {
     const body = this.physicsEngine?.playerBody;
     if (!body) return false;
 
-    if (this.isOnPlatform || this.jumpsRemaining === 2) {
+    if (this.isOnPlatform) {
       // First jump
       Matter.Body.setVelocity(body, {
         x: body.velocity.x,
@@ -326,8 +326,7 @@ class Player {
     return (
       this.isOnPlatform ||
       currentTime - this.lastGroundedTime <= PHYSICS_CONSTANTS.COYOTE_TIME ||
-      (this.doubleJumpAvailable &&
-        this.physicsEngine?.playerBody?.velocity.y !== 0)
+      this.doubleJumpAvailable
     );
   }
 
@@ -505,8 +504,8 @@ class PhysicsEngine {
   isDead: boolean;
   isComplete: boolean;
   isDying: boolean;
-  lastJumpPressTime: number;
   lastLaneSwitchTime: number;
+  lastJumpPressed: boolean;
   unlockedGroups: Set<string | number>;
   activeModifiers: Set<LevelBlock>;
   laneConstraint: Constraint | null;
@@ -610,7 +609,8 @@ class PhysicsEngine {
     this.initializeLevelBlocks();
     this.keys = {};
     this.isPaused = this.isDead = this.isComplete = this.isDying = false;
-    this.lastJumpPressTime = this.lastLaneSwitchTime = 0;
+    this.lastLaneSwitchTime = 0;
+    this.lastJumpPressed = false;
     this.unlockedGroups = new Set();
     this.activeModifiers = new Set();
     this.laneConstraint = null;
@@ -944,26 +944,18 @@ class PhysicsEngine {
 
     // Normalize keys to lowercase
     const down = (k: string) => !!(this.keys[k] || this.keys[k.toLowerCase()]);
-
     // Jump input with buffering
     const jumpPressed = down("Space") || down("arrowup") || down("w");
-    if (jumpPressed) {
+    if (jumpPressed && !this.lastJumpPressed) {
       // Buffer jump input
       this.player.inputBuffer.jump = PHYSICS_CONSTANTS.JUMP_BUFFER_TIME;
     }
 
     // Process buffered jump
     if (this.player.inputBuffer.jump > 0 && this.player.canJump(currentTime)) {
-      if (
-        currentTime - this.lastJumpPressTime >=
-          PHYSICS_CONSTANTS.JUMP_BUFFER_TIME ||
-        !this.lastJumpPressTime
-      ) {
-        this.lastJumpPressTime = currentTime;
-        if (this.player.jump()) {
-          this.audioManager?.playJumpSound?.();
-          this.player.inputBuffer.jump = 0; // Consume the buffered input
-        }
+      if (this.player.jump()) {
+        this.audioManager?.playJumpSound?.();
+        this.player.inputBuffer.jump = 0; // Consume the buffered input
       }
     }
 
@@ -1319,10 +1311,10 @@ class PhysicsEngine {
   }
 
   reset() {
-    this.player.reset();
     this.isDead = this.isComplete = false;
     this.activeModifiers.clear();
-    this.lastJumpPressTime = 0;
+    this.lastJumpPressed = false;
+    this.activeModifiers.clear();
     if (
       this.playerBody &&
       isFinite(this.playerBody.position.x) &&
@@ -1353,9 +1345,8 @@ class PhysicsEngine {
       isDead: false,
       isComplete: false,
       keys: {},
-      lastJumpPressTime: 0,
       lastLaneSwitchTime: 0,
-      isDying: false,
+      lastJumpPressed: false,
     } as Partial<PhysicsEngine>);
   }
 
