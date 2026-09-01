@@ -30,6 +30,7 @@
   },
   "homepage": "https://github.com/TeleporterDash/TeleporterDash#readme",
   "dependencies": {
+    "@nisoku/sairin": "^0.1.2",
     "@pixi/display": "^7.4.3",
     "@pixi/filter-displacement": "^7.4.3",
     "@types/lodash": "^4.17.20",

@@ -7,6 +7,7 @@ import {
   setLogLevel,
 } from "./Modules/logManager";
 import AudioManager from "./Modules/audioManager";
+import { audioManager } from "./Modules/audioContext";
 import { MatrixParser } from "./Modules/matrixParser";
 import { Player, PhysicsEngine, AudioManagerLike } from "./Modules/physicsEngine";
 import { getTeleportTarget } from "./Modules/teleporterEngine";
@@ -21,7 +22,8 @@ import { Application, WebGLRenderer, VERSION } from "pixi.js";
 import { gameLoop } from "./Modules/gameLoop";
 
 // Create global instances
-window.audioManager = new AudioManager();
+// Use the shared audioManager singleton from audioContext
+window.audioManager = audioManager;
 window.autoRestart = true; // Default to auto restart
 
 // Now we can set the log level after importing it

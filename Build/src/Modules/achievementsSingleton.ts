@@ -2,6 +2,7 @@ import { AchievementManager, type AchievementId } from "./achievementManager";
 import { storageManager } from "./storageManager";
 import { PopupManager } from "./popupManager";
 import AudioManager from "./audioManager";
+import { audioManager } from "./audioContext";
 import ACHIEVEMENTS from "../JSON/achievements.json";
 
 type RunData = {
@@ -20,7 +21,7 @@ const updateIfValid = (id: string, progress: number): void => {
 
 // Create a singleton instance of AchievementManager
 const achievementManager = new AchievementManager({
-  audioManager: new AudioManager(),
+  audioManager,
   popupManager: new PopupManager(),
   storageManager,
   debugMode: true,

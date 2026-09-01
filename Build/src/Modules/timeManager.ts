@@ -2,6 +2,7 @@
 import { gsap } from "gsap";
 import _ from "lodash";
 import { storageManager } from "./storageManager";
+import { signal } from "@nisoku/sairin";
 
 type TweenTimeline = ReturnType<typeof gsap.timeline>;
 
@@ -68,8 +69,22 @@ class TimeManager {
 
   onTimeEvent?: TimeEventListener;
 
+  // Reactive signals (Sairin)
+  private readonly totalTimeSignal: any;
+  private readonly deltaSignal: any;
+  private readonly fpsSignal: any;
+  private readonly pausedSignal: any;
+  private readonly interpolationSignal: any;
+
   constructor() {
     this.tweenTimeline = gsap.timeline({ paused: true });
+    // Initialize reactive signals
+    this.totalTimeSignal = signal("time.total", 0);
+    this.deltaSignal = signal("time.delta", 0);
+    this.fpsSignal = signal("time.fps", 0);
+    this.pausedSignal = signal("time.paused", this.paused);
+    this.interpolationSignal = signal("time.interpolation", 0);
+
     void this.init();
   }
 
@@ -117,6 +132,11 @@ class TimeManager {
     this.frameCount++;
     this.updateFPS(rawDelta);
 
+    // Update reactive signals
+    this.deltaSignal.set(this.deltaTime);
+    this.totalTimeSignal.set(this.totalTime);
+    this.interpolationSignal.set(this.interpolationAlpha);
+
     // Process scheduled events
     this.processScheduledEvents();
 
@@ -137,6 +157,8 @@ class TimeManager {
       }
 
       this.averageFPS = _.mean(this.fpsHistory);
+      // update signal
+      this.fpsSignal.set(this.averageFPS);
     }
   }
 
@@ -190,12 +212,14 @@ class TimeManager {
   pause(): void {
     this.paused = true;
     this.tweenTimeline.pause();
+    this.pausedSignal.set(true);
     this.emit("paused");
   }
 
   resume(): void {
     this.paused = false;
     this.tweenTimeline.resume();
+    this.pausedSignal.set(false);
     this.emit("resumed");
   }
 
@@ -361,6 +385,27 @@ class TimeManager {
     console.table(this.getPerformanceReport());
     console.log("Time Effects:", Array.from(this.timeEffects.keys()));
     console.log("Scheduled Events:", this.scheduledEvents.size);
+  }
+
+  // Expose signals for other modules to subscribe to
+  get timeSignal(): any {
+    return this.totalTimeSignal;
+  }
+
+  get deltaTimeSignal(): any {
+    return this.deltaSignal;
+  }
+
+  get fpsSignalRef(): any {
+    return this.fpsSignal;
+  }
+
+  get pausedSignalRef(): any {
+    return this.pausedSignal;
+  }
+
+  get interpolationSignalRef(): any {
+    return this.interpolationSignal;
   }
 
   // Cleanup

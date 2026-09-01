@@ -5,6 +5,7 @@ import { AchievementsManager } from "./achievementsSingleton";
 import { LevelUpManager } from "./levelUpManager";
 import { currencyManager } from "./currencyManager";
 import { warn, debug } from "./logManager";
+import { signal } from "@nisoku/sairin";
 
 const LOG_CONTEXT = "scoreManager";
 const SCOREBOARD_CONTAINER_ID = "scoreboard";
@@ -122,25 +123,29 @@ const serializeLevelScore = (score: LevelScore): SerializedLevelScore => ({
 });
 
 class ScoreManagerService {
-  private readonly scores = new Map<string, LevelScore>();
+  // Use a Sairin signal to hold the scores map so other parts of the app
+  // can subscribe/react when scores change.
+  private readonly scores = signal("scores", new Map<string, LevelScore>());
 
   get allScores(): ReadonlyMap<string, LevelScore> {
-    return this.scores;
+    return this.scores.get();
   }
 
   async initialize(): Promise<void> {
     try {
       const persisted =
         await storageManager.getAllFromStore<SerializedLevelScore>("scores");
+      const map = new Map<string, LevelScore>();
       for (const entry of persisted) {
         const normalized = normalizeScore(entry);
         if (normalized) {
-          this.scores.set(normalized.levelId, normalized);
+          map.set(normalized.levelId, normalized);
         }
       }
+      this.scores.set(map);
       debug(
         LOG_CONTEXT,
-        `Initialized with ${this.scores.size} score records from storage`
+        `Initialized with ${this.scores.get().size} score records from storage`
       );
     } catch (err) {
       warn(LOG_CONTEXT, "Failed to initialize scores:", err);
@@ -153,8 +158,9 @@ class ScoreManagerService {
     jumps: number,
     deaths = 0
   ): Promise<void> {
-    const levelScore =
-      this.scores.get(filename) ?? createDefaultLevelScore(filename);
+    const map = this.scores.get();
+
+    const levelScore = map.get(filename) ?? createDefaultLevelScore(filename);
 
     const previousBestTime = levelScore.bestTime;
     const previousBestJumps = levelScore.bestJumps;
@@ -167,7 +173,8 @@ class ScoreManagerService {
     levelScore.bestJumps = Math.min(levelScore.bestJumps, jumps);
     levelScore.lowestDeaths = Math.min(levelScore.lowestDeaths, deaths);
 
-    this.scores.set(filename, levelScore);
+    map.set(filename, levelScore);
+    this.scores.set(map);
     await storageManager.saveToStore(
       "scores",
       filename,
@@ -213,7 +220,7 @@ class ScoreManagerService {
   }
 
   getLevelStats(filename: string): LevelStats | null {
-    const levelScore = this.scores.get(filename);
+    const levelScore = this.scores.get().get(filename);
     if (!levelScore) return null;
 
     return {
@@ -236,7 +243,7 @@ class ScoreManagerService {
 
   async updateMenuScoreboardUI(): Promise<void> {
     const entries: Array<[string, LevelStats]> = [];
-    for (const [levelId] of this.scores) {
+    for (const [levelId] of this.scores.get()) {
       const stats = this.getLevelStats(levelId);
       if (stats) {
         entries.push([levelId, stats]);

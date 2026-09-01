@@ -1,5 +1,6 @@
 import localforage from "localforage";
 import { warn, error, debug, verbose } from "./logManager";
+import { resource } from "./sairinAdapter";
 
 type StoreName = "game" | "editor" | "scores";
 
@@ -89,7 +90,11 @@ export class StorageManager {
 
   constructor() {
     void this.initialize();
+    this.levelResources = new Map();
   }
+
+  // Cache of Sairin resources for levels
+  private levelResources: Map<string, ReturnType<typeof resource>>;
 
   async initialize(): Promise<void> {
     debug("storageManager", "StorageManager initialized with localforage");
@@ -274,6 +279,28 @@ export class StorageManager {
     await this.saveToStore("game", filename, levelConfig);
     debug("storageManager", `Level ${filename} downloaded successfully`);
     return levelConfig;
+  }
+
+  /**
+   * Return a Sairin `resource` for a level. The resource will attempt to
+   * read the level from local storage first and fall back to downloading it.
+   */
+  getLevelResource(filename: string) {
+    const existing = this.levelResources.get(filename);
+    if (existing) return existing;
+
+    const res = resource(async (signal) => {
+      // Try cached/local version first
+      const local = await this.getFromStore<Record<string, unknown>>("game", filename);
+      if (local) return local;
+
+      // Otherwise download and persist
+      const downloaded = await this.downloadLevel(filename);
+      return downloaded;
+    });
+
+    this.levelResources.set(filename, res);
+    return res;
   }
 
   async deleteDownloadedLevel(filename: string): Promise<void> {
