@@ -1,6 +1,6 @@
-// Level 0: Raining Heights
+// Level -3: Raining Heights
 window.levelData = {
-    id: 47,
+    id: -3,
     title: "Raining Heights",
     author: "NellowTCS",
     difficulty: "Normal",

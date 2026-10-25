@@ -68,7 +68,7 @@ function startGame() {
   if (currentLevelType === "built-in" && window.builtInLevels) {
     // @ts-ignore
     const level = window.builtInLevels[currentLevelIndex];
-    window.location.href = `TDLoader.html?level=${level.number}`;
+    window.location.href = `TDLoader.html?level=${level.id}`;
     // @ts-ignore
   } else if (currentLevelType === "online" && window.onlineLevels) {
     // @ts-ignore
@@ -116,18 +116,10 @@ let maxLevelIndex = 0;
 let loadingStarted = false;
 let currentLevelType = "built-in";
 
+const WORKER_URL = "https://tdserver.neeljaiswal23.workers.dev";
+
 async function getDownloadedLevels() {
   return await DatabaseManager.getDownloadedLevels();
-}
-
-const BUILT_IN_LEVELS = [
-  { filename: "level1.js", number: 1 },
-  { filename: "level2.js", number: 2 },
-  { filename: "level3.js", number: 3 },
-];
-
-async function scanForLevels() {
-  return BUILT_IN_LEVELS;
 }
 
 async function loadBuiltInLevelRegistry() {
@@ -148,12 +140,54 @@ async function loadBuiltInLevelRegistry() {
   levelSelector.innerHTML = "";
   levelSelector.appendChild(content);
 
-  const levels = await scanForLevels();
-  // @ts-ignore
-  window.builtInLevels = levels;
-  currentLevelIndex = 0;
-  maxLevelIndex = levels.length - 1;
-  await updateLevelDisplay();
+  try {
+    // Campaign levels 1-3 load from static files
+    const builtInLevels = [];
+    for (let i = 1; i <= 3; i++) {
+      try {
+        const resp = await fetch(`./public/Levels/level${i}.js`);
+        if (resp.ok) {
+          const text = await resp.text();
+          const match = text.match(/window\.levelData\s*=\s*({[\s\S]*});/);
+          if (match) {
+            const levelData = eval(`(${match[1]})`);
+            builtInLevels.push({
+              id: i,
+              number: i,
+              title: levelData.title,
+              author: levelData.author,
+              difficulty: levelData.difficulty,
+              matrix: levelData.matrix,
+              music: levelData.music,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(`Could not load built-in level ${i}:`, e);
+      }
+    }
+
+    if (builtInLevels.length === 0) {
+      const levelDisplay = document.querySelector(
+        ".built-in-levels .level-display",
+      );
+      levelDisplay.innerHTML =
+        '<p class="no-levels">No levels available yet.</p>';
+      return;
+    }
+    // @ts-ignore
+    window.builtInLevels = builtInLevels;
+    currentLevelIndex = 0;
+    maxLevelIndex = builtInLevels.length - 1;
+    await updateLevelDisplay();
+  } catch (error) {
+    console.error("Error loading built-in levels:", error);
+    const levelDisplay = document.querySelector(
+      ".built-in-levels .level-display",
+    );
+    levelDisplay.innerHTML =
+      '<p class="error-message">Failed to load levels.<br>Please try again later.</p>';
+  }
 }
 
 async function loadOnlineLevelRegistry() {
@@ -251,20 +285,20 @@ async function updateLevelDisplay() {
   try {
     let levelData;
     if (currentLevelType === "built-in") {
-      const script = document.createElement("script");
-      script.src = `Levels/${BUILT_IN_LEVELS[currentLevelIndex].filename}`;
-
-      await new Promise((resolve, reject) => {
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-
       // @ts-ignore
-      levelData = window.levelData;
-      document.head.removeChild(script);
+      if (!window.builtInLevels || !Array.isArray(window.builtInLevels)) {
+        throw new Error("No built-in levels data available");
+      }
+
+      if (
+        currentLevelIndex < 0 ||
+        // @ts-ignore
+        currentLevelIndex >= window.builtInLevels.length
+      ) {
+        throw new Error(`Invalid level index: ${currentLevelIndex}`);
+      }
       // @ts-ignore
-      window.levelData = null;
+      levelData = window.builtInLevels[currentLevelIndex];
     } else {
       // @ts-ignore
       if (!window.onlineLevels || !Array.isArray(window.onlineLevels)) {
@@ -300,7 +334,7 @@ async function updateLevelDisplay() {
     title.textContent =
       levelData.title ||
       (currentLevelType === "built-in"
-        ? `Level ${BUILT_IN_LEVELS[currentLevelIndex].number}`
+        ? `Level ${levelData.id}`
         : levelData.filename.replace(".js", ""));
 
     const stats = document.createElement("div");
@@ -400,7 +434,7 @@ function clearData() {
         "Do you want to leave the page? (Clicking No/Cancel will reload the page)",
       )
     ) {
-      window.location.href = "https://github.com/NellowTCS/TeleporterDash/";
+      window.location.href = "https://github.com/TeleporterDash/TeleporterDash/";
     } else {
       location.reload();
     }

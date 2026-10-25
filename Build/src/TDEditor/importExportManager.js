@@ -124,12 +124,46 @@ colorTransitionDelay: 0.1
 
   showExportSuccess() {
     alert(
-      "Your level will be downloaded for backup and then you will be redirected to a form to submit your level in a few seconds. Note: If you get the error 'Address unavailable:', this is just an GitHub server issue and you can click Upload again.",
+      "Level exported for backup. You can now submit it to the community or keep it for yourself.",
     );
     setTimeout(() => {
-      window.location.href =
-        "https://script.google.com/macros/s/AKfycby1XUV7ovzK6NbLdGLVX36V9_FrkFXDyeZrCpGkNmKBc3TI6rqi0m_6_Jcg46XELyffug/exec";
-    }, 3000);
+      this.submitToWorker();
+    }, 1500);
+  }
+
+  async submitToWorker() {
+    const levelName = DOMManager.getValue("#levelName") || "Untitled Level";
+    const authorName = DOMManager.getValue("#authorName") || "Unknown Author";
+
+    const payload = {
+      title: levelName,
+      author: authorName,
+      description: "",
+      matrix: GameState.current.editor.levelMatrix,
+      colorRow: GameState.current.editor.levelMatrix[0] || [],
+      music: "",
+    };
+
+    try {
+      const resp = await fetch(
+        "https://tdserver.neeljaiswal23.workers.dev/level",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const result = await resp.json();
+      if (result.success) {
+        alert(`Level submitted to the community! Level ID: ${result.id}`);
+      } else {
+        alert("Submission failed: " + (result.error || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Submit failed:", error);
+      alert("Failed to submit level. Check your connection and try again.");
+    }
+  }
   }
 
   // ===== Import Operations =====

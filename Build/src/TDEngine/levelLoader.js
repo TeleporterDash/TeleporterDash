@@ -21,33 +21,42 @@ const progressFill = DOMManager.getElement("#progressFill");
 const progressText = DOMManager.getElement("#progressText");
 
 export const LevelLoader = {
-  // // "Initialize" Variables
-  GITHUB_API_BASE:
-    "https://api.github.com/repos/NellowTCS/TeleporterDashLevels",
-  RAW_CONTENT_BASE:
-    "https://raw.githubusercontent.com/NellowTCS/TeleporterDashLevels/main",
+  WORKER_URL: "https://tdserver.neeljaiswal23.workers.dev",
 
-  // // Load from Github
-  async loadFromGithub(filename) {
-    try {
-      const response = await fetch(`${this.RAW_CONTENT_BASE}/${filename}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch level");
-      }
-      const levelCode = await response.text();
+  // Load from static built-in level file
+  async loadFromStatic(id) {
+    // level1.js, level2.js, level3.js are the real campaign levels
+    // level-1.js, level-2.js, level-3.js are test levels
+    const filename = id < 0 ? `./public/Levels/level-${Math.abs(id)}.js` : `./public/Levels/level${id}.js`;
+    return new Promise((resolve, reject) => {
+      delete window.levelData;
+      const script = document.createElement("script");
+      script.src = filename;
+      script.onload = () => {
+        if (!window.levelData) {
+          reject(new Error("Failed to load built-in level data"));
+          return;
+        }
+        const data = window.levelData;
+        delete window.levelData;
+        script.remove();
+        resolve(data);
+      };
+      script.onerror = () => {
+        script.remove();
+        reject(new Error(`Failed to load built-in level: ${filename}`));
+      };
+      document.head.appendChild(script);
+    });
+  },
 
-      // Create a safe environment to evaluate the level code
-      const levelData = new Function(`
-                window = {};
-                ${levelCode}
-                return window.levelData;
-            `)();
-
-      return levelData;
-    } catch (error) {
-      console.error("Error loading level:", error);
-      throw error;
-    }
+  // // Load from Cloudflare Worker API
+  async loadFromWorker(id) {
+    const resp = await fetch(`${this.WORKER_URL}/level/${id}`);
+    if (!resp.ok) throw new Error(`Worker returned ${resp.status}`);
+    const levels = await resp.json();
+    if (!levels || levels.length === 0) throw new Error("Empty response");
+    return levels[0];
   },
 
   // // Load from IndexedDB
@@ -126,48 +135,24 @@ export const LevelLoader = {
       if (urlParams.has("level")) {
         console.log("Loading built-in level");
         const levelNumber = urlParams.get("level");
-        if (!/^\d+$/.test(levelNumber)) {
+        if (!/^-?\d+$/.test(levelNumber)) {
           showLoadingError("Invalid level number");
           return;
         }
-        GameState.setState({ levelId: levelNumber }); // Set the level ID here
+        GameState.setState({ levelId: levelNumber });
         console.log("Loading level:", levelNumber);
 
-        // Dynamically load the level script file
-        const levelScript = document.createElement("script");
-        levelScript.src = `./Levels/level${levelNumber}.js`;
-        console.log("Created script element for:", levelScript.src);
-
-        await new Promise((resolve, reject) => {
-          levelScript.onload = () => {
-            console.log("Level script loaded");
-            // @ts-ignore
-            if (window.levelData) {
-              // @ts-ignore
-              console.log("Level data found:", window.levelData);
-              // @ts-ignore
-              this.processLevelData(window.levelData)
-                .then(() => {
-                  const state = GameState.getState();
-                  if (state.isPracticeMode) {
-                    this.initializePracticeMode();
-                  }
-                  resolve();
-                })
-                .catch(reject);
-            } else {
-              reject(new Error("Level data not found in loaded script"));
-            }
-          };
-
-          levelScript.onerror = (error) => {
-            console.error("Error loading level script:", error);
-            showLoadingError(`Failed to load level ${levelNumber}`);
-            reject(error);
-          };
-
-          document.body.appendChild(levelScript);
-        });
+        const levelNum = parseInt(levelNumber);
+        // Campaign levels 1-3 load from static files, negative load from test files, others from Worker
+        const levelData =
+          (levelNum >= 1 && levelNum <= 3) || levelNum < 0
+            ? await this.loadFromStatic(levelNum)
+            : await this.loadFromWorker(levelNum);
+        await this.processLevelData(levelData);
+        const state = GameState.getState();
+        if (state.isPracticeMode) {
+          this.initializePracticeMode();
+        }
       }
     } catch (error) {
       console.error("Error initializing level data:", error);
