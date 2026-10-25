@@ -1,202 +1,47 @@
-// Store levels array
 import { DatabaseManager } from "./Utilities/databaseManager.js";
 import { DOMManager } from "./Utilities/domManager.js";
 import "./Utilities/levelPreview.js";
 
+const WORKER_URL = "https://tdserver.neeljaiswal23.workers.dev";
+
 const storeLevels = [];
-const GITHUB_API_BASE =
-  "https://api.github.com/repos/NellowTCS/TeleporterDashLevels";
-const RAW_CONTENT_BASE =
-  "https://raw.githubusercontent.com/NellowTCS/TeleporterDashLevels/main";
 
-// ===== Database Management =====
-async function deleteDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.deleteDatabase(DatabaseManager.DB_NAME);
-    request.onsuccess = () => {
-      console.log("Database deleted successfully");
-      resolve();
-    };
-    request.onerror = () => {
-      console.error("Error deleting database");
-      reject();
-    };
-  });
-}
-
-// ===== Level Store Management =====
+// Load levels from Worker API
 async function loadStoreLevels() {
   try {
-    // Clear existing levels
     storeLevels.length = 0;
 
-    // Show loading state
     DOMManager.getElement("#levelGrid").innerHTML = `
                     <div style="grid-column: 1/-1; text-align: center;">
                         Loading levels...
                     </div>`;
 
-    // Fetch the list of files from the GitHub repository
-    const response = await fetch(`${GITHUB_API_BASE}/contents`);
-    if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.status}`);
+    // Use ?full=true to get matrices for preview rendering
+    const resp = await fetch(`${WORKER_URL}/levels?full=true`);
+    if (!resp.ok) throw new Error(`Worker returned ${resp.status}`);
+    const levels = await resp.json();
+
+    if (!Array.isArray(levels) || levels.length === 0) {
+      throw new Error("No levels returned");
     }
 
-    const files = await response.json();
-
-    // Filter for .js files
-    const levelFiles = files.filter((file) => file.name.endsWith(".js"));
-    console.log("Found level files:", levelFiles);
-
-    if (levelFiles.length === 0) {
-      throw new Error("No level files found in repository");
-    }
-
-    // Load each level file and check downloaded status
-    const levelPromises = levelFiles.map(async (file) => {
-      try {
-        // Fetch the raw content of the level file
-        const levelResponse = await fetch(`${RAW_CONTENT_BASE}/${file.name}`);
-        if (!levelResponse.ok) {
-          throw new Error(`Failed to fetch level ${file.name}`);
-        }
-
-        const levelCode = await levelResponse.text();
-
-        // Create a safe environment to evaluate the level code
-        const levelData = new Function(`
-                            let window = {};
-                            ${levelCode}
-                            return window.levelData;
-                        `)();
-
-        if (!levelData || !levelData.matrix) {
-          throw new Error(`Invalid level data in ${file.name}`);
-        }
-
-        // Add metadata
-        levelData.filename = file.name;
-        levelData.dateAdded = levelData.dateAdded || new Date().toISOString();
-        levelData.plays = levelData.plays || 0;
-        levelData.rating = levelData.rating || 0;
-        levelData.difficulty =
-          levelData.difficulty || getDifficultyFromMatrix(levelData.matrix);
-
-        // Check if this level is downloaded
-        levelData.isDownloaded = await isLevelDownloaded(file.name);
-
-        return levelData;
-      } catch (error) {
-        console.error(`Error loading level ${file.name}:`, error);
-        // Provide more detailed error information
-        console.error("Error details:", {
-          message: error.message,
-          name: error.name,
-          stack: error.stack,
-        });
-        return null;
-      }
-    });
-
-    // Wait for all levels to load
-    const loadedLevels = await Promise.all(levelPromises);
-
-    // Filter out any failed loads and add to storeLevels
-    const validLevels = loadedLevels.filter((level) => level !== null);
-
-    if (validLevels.length === 0) {
-      throw new Error("No valid levels could be loaded");
-    }
-
-    storeLevels.push(...validLevels);
-
-    // Display the loaded levels
+    storeLevels.push(...levels);
     displayLevels(storeLevels);
   } catch (error) {
-    console.error("Error loading levels from GitHub:", error);
-    console.error("Error details:", {
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-    });
-
-    const errorMessage =
-      error.message ||
-      error.name ||
-      "Error loading levels. Please try again later.";
+    console.error("Error loading levels:", error);
     DOMManager.getElement("#levelGrid").innerHTML = `
                     <div style="grid-column: 1/-1; text-align: center; color: red;">
-                        ${errorMessage}
+                        Failed to load levels. Please try again later.
                     </div>`;
   }
 }
 
-// // Level Download Management
-async function downloadLevel(filename) {
-  try {
-    const response = await fetch(`${RAW_CONTENT_BASE}/${filename}`);
-    const levelCode = await response.text();
-    console.log(levelCode);
-
-    // Create a temporary environment to evaluate the level data
-    const levelData = new Function(`
-                    window = {};
-                    ${levelCode}
-                    return window.levelData;
-                `)();
-
-    // Add download metadata
-    levelData.filename = filename;
-    levelData.dateDownloaded = new Date().toISOString();
-    levelData.originalCode = levelCode;
-
-    // Store in IndexedDB
-    await DatabaseManager.putLevel(levelData);
-    console.log(`Level ${filename} downloaded successfully`);
-    updateLevelCard(filename);
-    return true;
-  } catch (error) {
-    console.error("Error downloading level:", error);
-    alert("Failed to download level. Please try again.");
-    return false;
-  }
+// Play a level (navigates to game with Worker-served level)
+function playLevel(levelId) {
+  window.location.href = `TDLoader.html?level=${levelId}`;
 }
 
-// // Delete Level
-async function deleteLevel(filename) {
-  try {
-    await DatabaseManager.deleteLevel(filename);
-    console.log(`Level ${filename} deleted successfully`);
-    updateLevelCard(filename);
-    return true;
-  } catch (error) {
-    console.error("Error deleting level:", error);
-    return false;
-  }
-}
-
-// ===== Checks =====
-async function isLevelDownloaded(filename) {
-  return await DatabaseManager.hasLevel(filename);
-}
-
-function updateLevelCard(filename) {
-  const card = document.querySelector(`[data-filename="${filename}"]`);
-  if (card) {
-    const downloadButton = card.querySelector(".download-button");
-    const deleteButton = card.querySelector(".delete-button");
-
-    downloadButton.textContent = "Play Level 🎮";
-    // @ts-ignore
-    downloadButton.disabled = false;
-    // @ts-ignore
-    downloadButton.onclick = () => startGame(filename);
-
-    deleteButton.classList.remove("hidden");
-  }
-}
-
-// ===== Level Display System =====
+// Level Display System
 function displayLevels(levels) {
   const levelGrid = DOMManager.getElement("#levelGrid");
 
@@ -208,22 +53,17 @@ function displayLevels(levels) {
     return;
   }
 
-  // Clear existing content
   levelGrid.innerHTML = "";
 
-  // Create and append level cards
   levels.forEach((level) => {
     try {
       const card = createLevelCard(level);
-      if (card) {
-        levelGrid.appendChild(card);
-      }
+      if (card) levelGrid.appendChild(card);
     } catch (error) {
-      console.error(`Error creating card for level ${level.filename}:`, error);
+      console.error(`Error creating card for level ${level.id}:`, error);
     }
   });
 
-  // If no cards were successfully created
   if (levelGrid.children.length === 0) {
     levelGrid.innerHTML = `
                     <div style="grid-column: 1/-1; text-align: center;">
@@ -233,135 +73,151 @@ function displayLevels(levels) {
 }
 
 function createLevelCard(level) {
-  try {
-    if (!level || !level.matrix || !level.filename) {
-      console.error("Invalid level data:", level);
-      return null;
-    }
-
-    const card = document.createElement("div");
-    card.className = "level-card";
-    card.id = `card-${level.filename}`;
-    card.setAttribute("data-filename", level.filename);
-
-    // Create preview canvas
-    const previewCanvas = document.createElement("canvas");
-    previewCanvas.className = "level-preview";
-    previewCanvas.width = 500;
-    previewCanvas.height = 200;
-
-    // Draw level preview
-    drawLevelPreview(previewCanvas, level);
-
-    // Create level info section
-    const infoDiv = document.createElement("div");
-    infoDiv.className = "level-info";
-
-    const title = document.createElement("h3");
-    title.className = "level-title";
-    title.textContent = level.title || level.filename.replace(".js", "");
-
-    const author = document.createElement("p");
-    author.className = "level-author";
-    author.textContent = level.author || "Unknown Author";
-
-    const stats = document.createElement("div");
-    stats.className = "level-stats";
-    stats.innerHTML = `
-                    <span>Difficulty: ${level.difficulty || "Normal"}</span>
-                    <span style="text-decoration: line-through;">Plays: ${
-                      level.plays || 0
-                    }</span>
-                `;
-
-    // Create button container for download/delete buttons
-    const buttonContainer = document.createElement("div");
-    buttonContainer.className = "button-container";
-
-    // Create download button
-    const downloadBtn = document.createElement("button");
-    downloadBtn.className = "download-button";
-    downloadBtn.textContent = level.isDownloaded ? "Play Level 🎮" : "Download";
-    downloadBtn.onclick = level.isDownloaded
-      ? () => startGame(level.filename)
-      : () => downloadLevel(level.filename);
-
-    // Create delete button (only shown for downloaded levels)
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className =
-      "delete-button" + (level.isDownloaded ? "" : " hidden");
-    deleteBtn.textContent = "🗑️";
-    deleteBtn.title = "Delete downloaded level";
-    deleteBtn.onclick = async () => {
-      if (confirm(`Are you sure you want to delete "${level.title}"?`)) {
-        try {
-          await deleteLevel(level.filename);
-          level.isDownloaded = false;
-          downloadBtn.className = "download-button";
-          downloadBtn.textContent = "Download";
-          downloadBtn.disabled = false;
-          downloadBtn.onclick = () => downloadLevel(level.filename);
-          deleteBtn.className = "delete-button hidden";
-        } catch (error) {
-          console.error("Failed to delete level:", error);
-          alert("Failed to delete level. Please try again.");
-        }
-      }
-    };
-
-    // Assemble card
-    infoDiv.appendChild(title);
-    infoDiv.appendChild(author);
-    infoDiv.appendChild(stats);
-
-    buttonContainer.appendChild(downloadBtn);
-    buttonContainer.appendChild(deleteBtn);
-
-    card.appendChild(previewCanvas);
-    card.appendChild(infoDiv);
-    card.appendChild(buttonContainer);
-
-    return card;
-  } catch (error) {
-    console.error(`Error creating card for level ${level?.filename}:`, error);
+  if (!level || !level.title) {
+    console.error("Invalid level data:", level);
     return null;
   }
-}
 
-function getDifficultyFromMatrix(matrix) {
-  if (!matrix) return "Normal";
+  const card = document.createElement("div");
+  card.className = "level-card";
+  card.id = `card-${level.id}`;
+  card.setAttribute("data-id", level.id);
 
-  // Count special tiles (teleporters, spikes, etc.)
-  let specialTiles = 0;
-  let length = 0;
+  const previewCanvas = document.createElement("canvas");
+  previewCanvas.className = "level-preview";
+  previewCanvas.width = 500;
+  previewCanvas.height = 200;
 
-  for (let row of matrix) {
-    length = Math.max(length, row.length);
-    for (let tile of row) {
-      if (tile > 1 && tile !== 4) {
-        // 4 is the finish line
-        specialTiles++;
-      }
-    }
+  if (level.matrix) {
+    drawLevelPreview(previewCanvas, level);
+  } else {
+    const ctx = previewCanvas.getContext("2d");
+    ctx.fillStyle = "#1a1a2e";
+    ctx.fillRect(0, 0, 500, 200);
+    ctx.fillStyle = "#666";
+    ctx.font = "20px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Tap Play to preview", 250, 100);
   }
 
-  // Calculate difficulty based on level length and special tiles
-  const density = specialTiles / (length * matrix.length);
+  const infoDiv = document.createElement("div");
+  infoDiv.className = "level-info";
 
-  if (density < 0.02) return "Easy";
-  if (density < 0.03) return "Normal";
-  if (density < 0.05) return "Hard";
-  if (density < 0.08) return "Harder";
-  if (density < 0.09) return "Expert";
-  if (density < 0.1) return "Insane";
-  if (density < 0.3) return "Extreme";
-  if (density < 0.7) return "Easy Demon";
-  if (density < 0.8) return "Medium Demon";
-  if (density < 9) return "Super Demon";
-  return "Impossible?";
+  const title = document.createElement("h3");
+  title.className = "level-title";
+  title.textContent = level.title || `Level ${level.id}`;
+
+  const author = document.createElement("p");
+  author.className = "level-author";
+  author.textContent = level.author || "Unknown Author";
+
+  const stats = document.createElement("div");
+  stats.className = "level-stats";
+  stats.innerHTML = `
+                    <span>Rating: ${level.rating ? level.rating.toFixed(1) : "0.0"}</span>
+                    <span>Comments: ${level.commentCount || 0}</span>
+                    <span>Played ${level.plays || 0} times</span>
+                `;
+
+  const buttonContainer = document.createElement("div");
+  buttonContainer.className = "button-container";
+
+  // Check if already downloaded for offline play
+  const isDownloaded = window.downloadedLevels && window.downloadedLevels[level.id];
+  const downloadBtn = document.createElement("button");
+  downloadBtn.className = "download-button" + (isDownloaded ? " downloaded" : "");
+  downloadBtn.textContent = isDownloaded ? "Play Offline" : "Download for Offline";
+  downloadBtn.onclick = () => downloadLevel(level.id);
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "delete-button" + (isDownloaded ? "" : " hidden");
+  deleteBtn.textContent = "Delete";
+  deleteBtn.title = "Remove from offline storage";
+  deleteBtn.onclick = async () => {
+    if (confirm(`Are you sure you want to remove "${level.title}" from offline storage?`)) {
+      try {
+        await DatabaseManager.deleteLevel(`level${level.id}.js`);
+        window.downloadedLevels[level.id] = false;
+        deleteBtn.className = "delete-button hidden";
+        downloadBtn.className = "download-button";
+        downloadBtn.textContent = "Download for Offline";
+        downloadBtn.onclick = () => downloadLevel(level.id);
+      } catch (error) {
+        console.error("Failed to delete:", error);
+        alert("Failed to remove level. Please try again.");
+      }
+    }
+  };
+
+  buttonContainer.appendChild(downloadBtn);
+  buttonContainer.appendChild(deleteBtn);
+  infoDiv.appendChild(title);
+  infoDiv.appendChild(author);
+  infoDiv.appendChild(stats);
+
+  card.appendChild(previewCanvas);
+  card.appendChild(infoDiv);
+  card.appendChild(buttonContainer);
+
+  return card;
 }
 
-// ===== Search and Filter Levels =====
+// Download level for offline play (IndexedDB)
+async function downloadLevel(levelId) {
+  try {
+    const resp = await fetch(`${WORKER_URL}/level/${levelId}`);
+    if (!resp.ok) throw new Error(`Worker returned ${resp.status}`);
+    const levels = await resp.json();
+    if (!levels || levels.length === 0) throw new Error("Level not found");
+
+    const level = levels[0];
+    level.filename = `level${levelId}.js`;
+    level.dateDownloaded = new Date().toISOString();
+
+    await DatabaseManager.putLevel(level);
+    window.downloadedLevels = window.downloadedLevels || {};
+    window.downloadedLevels[levelId] = true;
+
+    // Update the card UI
+    const card = document.querySelector(`[data-id="${levelId}"]`);
+    if (card) {
+      const dlBtn = card.querySelector(".download-button");
+      const delBtn = card.querySelector(".delete-button");
+      if (dlBtn) {
+        dlBtn.className = "download-button downloaded";
+        dlBtn.textContent = "Play Offline";
+        dlBtn.onclick = () => playLevelOffline(levelId);
+      }
+      if (delBtn) delBtn.className = "delete-button";
+    }
+
+    alert(`"${level.title}" saved for offline play!`);
+  } catch (error) {
+    console.error("Download failed:", error);
+    alert("Failed to download level. Check your connection and try again.");
+  }
+}
+
+// Play a downloaded (offline) level
+function playLevelOffline(levelId) {
+  window.location.href = `TDLoader.html?online=true&levelFile=level${levelId}.js`;
+}
+
+// Load downloaded levels status for offline play indicator
+async function loadDownloadedStatus() {
+  window.downloadedLevels = {};
+  try {
+    const levels = await DatabaseManager.getDownloadedLevels();
+    levels.forEach((level) => {
+      const id = level.filename ? level.filename.match(/level(\d+)\.js/)?.[1] : null;
+      if (id) window.downloadedLevels[id] = true;
+    });
+  } catch (error) {
+    console.error("Failed to load downloaded status:", error);
+  }
+}
+
+// Search and Filter Levels (client-side)
 function searchLevels(query) {
   const filtered = storeLevels.filter((level) =>
     level.title.toLowerCase().includes(query.toLowerCase()),
@@ -373,45 +229,24 @@ function filterLevels(criteria) {
   let filtered = [...storeLevels];
   switch (criteria) {
     case "newest":
-      filtered.sort((a, b) => {
-        const dateA = new Date(a.dateAdded || 0);
-        const dateB = new Date(b.dateAdded || 0);
-        return dateB.getTime() - dateA.getTime();
-      });
+      filtered.sort((a, b) => b.id - a.id);
       break;
     case "popular":
-      filtered.sort((a, b) => b.plays - a.plays);
+      filtered.sort((a, b) => (b.plays || 0) - (a.plays || 0));
       break;
-    case "difficulty":
-      const difficultyOrder = {
-        Easy: 1,
-        Normal: 2,
-        Hard: 3,
-        Harder: 4,
-        Expert: 4,
-        Insane: 5,
-        Extreme: 6,
-        "Easy Demon": 7,
-        "Medium Demon": 8,
-        "Super Demon": 9,
-        "Impossible?": 10,
-      };
-      filtered.sort(
-        (a, b) =>
-          (difficultyOrder[a.difficulty] || 2) -
-          (difficultyOrder[b.difficulty] || 2),
-      );
+    case "top":
+      filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
       break;
   }
   displayLevels(filtered);
 }
 
-// Initialize database when page loads
+// Initialize on page load
 window.onload = async () => {
   try {
     await DatabaseManager.initDB();
     console.log("Database initialized");
-    // Load levels after database is initialized
+    await loadDownloadedStatus();
     await loadStoreLevels();
     console.log("Levels loaded");
   } catch (error) {
@@ -422,13 +257,8 @@ window.onload = async () => {
                     </div>`;
   }
 };
-function startGame(levelFilename) {
-  window.location.href = `TDLoader.html?online=true&levelFile=${encodeURIComponent(
-    levelFilename,
-  )}`;
-}
 
-// Export functions for HTML onclick access
+// Export for HTML onclick
 // @ts-ignore
 window.searchLevels = searchLevels;
 // @ts-ignore
